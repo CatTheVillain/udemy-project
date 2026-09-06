@@ -160,18 +160,10 @@ describe('CourseReviews', () => {
       ),
     ).toBe(true);
     const thirdRating = within(ratingGroup).getByRole('radio', { name: 'Rating: 3/5' });
-    fireEvent.mouseEnter(thirdRating.closest('label')!);
-    expect(
-      [...ratingGroup.querySelectorAll('svg')].filter(
-        (star) => star.getAttribute('fill') === 'currentColor',
-      ),
-    ).toHaveLength(3);
-    fireEvent.mouseLeave(thirdRating.closest('label')!);
-    expect(
-      [...ratingGroup.querySelectorAll('svg')].every(
-        (star) => star.getAttribute('fill') === 'none',
-      ),
-    ).toBe(true);
+    fireEvent.pointerEnter(thirdRating.closest('label')!);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(3);
+    fireEvent.pointerLeave(thirdRating.closest('label')!, { relatedTarget: document.body });
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="neutral"]')]).toHaveLength(5);
     expect(
       (screen.getByRole('button', { name: 'Save review' }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -194,6 +186,95 @@ describe('CourseReviews', () => {
     expect(screen.getByText('15/1000')).toBeTruthy();
     fireEvent.submit(save.closest('form')!);
     expect(create.mutate).toHaveBeenCalledWith({ rating: 3, comment: 'Clear examples.' });
+  });
+
+  it('keeps native rating nodes stable while pointer and keyboard intent choose one preview state', async () => {
+    mockUseCourseReviews.mockReturnValue({
+      ...reviewState({
+        isPending: false,
+        isError: false,
+        data: { items: [], page: 1, pages: 0, has_next: false, has_previous: false },
+        refetch: vi.fn(),
+      }),
+      noOwnedReview: true,
+      ready: true,
+    } as unknown as ReturnType<typeof useCourseReviews>);
+
+    renderReviews();
+
+    const ratingGroup = screen.getByRole('group', { name: 'Rating' });
+    const three = within(ratingGroup).getByRole('radio', { name: 'Rating: 3/5' });
+    const four = within(ratingGroup).getByRole('radio', { name: 'Rating: 4/5' });
+    const five = within(ratingGroup).getByRole('radio', { name: 'Rating: 5/5' });
+    const initialStars = [...ratingGroup.querySelectorAll('svg')];
+
+    fireEvent.pointerEnter(three.closest('label')!);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(3);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="neutral"]')]).toHaveLength(2);
+
+    fireEvent.focus(four);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(4);
+
+    fireEvent.pointerMove(three.closest('label')!);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(3);
+    expect([...ratingGroup.querySelectorAll('svg')]).toEqual(initialStars);
+
+    fireEvent.pointerDown(three.closest('label')!);
+    fireEvent.click(three);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="committed"]')]).toHaveLength(3);
+    expect((three as HTMLInputElement).checked).toBe(true);
+    fireEvent.pointerMove(three.closest('label')!);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="committed"]')]).toHaveLength(3);
+
+    fireEvent.pointerDown(four.closest('label')!, { pointerId: 7 });
+    fireEvent.pointerLeave(four.closest('label')!, { relatedTarget: document.body });
+    fireEvent.pointerUp(document.body, { pointerId: 7 });
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    fireEvent.focus(five);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(5);
+    fireEvent.click(five);
+    expect((five as HTMLInputElement).checked).toBe(true);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="committed"]')]).toHaveLength(5);
+  });
+
+  it('promotes the remaining candidate at group exit and suppresses preview until deliberate re-entry', () => {
+    mockUseCourseReviews.mockReturnValue({
+      ...reviewState({
+        isPending: false,
+        isError: false,
+        data: { items: [], page: 1, pages: 0, has_next: false, has_previous: false },
+        refetch: vi.fn(),
+      }),
+      noOwnedReview: true,
+      ready: true,
+    } as unknown as ReturnType<typeof useCourseReviews>);
+
+    renderReviews();
+
+    const ratingGroup = screen.getByRole('group', { name: 'Rating' });
+    const three = within(ratingGroup).getByRole('radio', { name: 'Rating: 3/5' });
+    const four = within(ratingGroup).getByRole('radio', { name: 'Rating: 4/5' });
+    const threeLabel = three.closest('label')!;
+    const fourLabel = four.closest('label')!;
+
+    fireEvent.pointerEnter(threeLabel);
+    fireEvent.focus(four);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(4);
+    fireEvent.pointerLeave(threeLabel, { relatedTarget: document.body });
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(4);
+    fireEvent.blur(four, { relatedTarget: document.body });
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="neutral"]')]).toHaveLength(5);
+
+    fireEvent.pointerEnter(threeLabel);
+    fireEvent.pointerDown(threeLabel);
+    fireEvent.focus(three);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(3);
+    fireEvent.click(three);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="committed"]')]).toHaveLength(3);
+    fireEvent.pointerEnter(threeLabel);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="committed"]')]).toHaveLength(3);
+    fireEvent.pointerEnter(fourLabel);
+    expect([...ratingGroup.querySelectorAll('[data-rating-state="preview"]')]).toHaveLength(4);
   });
 
   it('shows the owned review once and opens the edit form only on request', () => {
@@ -241,7 +322,7 @@ describe('CourseReviews', () => {
     expect((screen.getByLabelText('What did you like?') as HTMLTextAreaElement).value).toBe(
       'Useful examples.',
     );
-    fireEvent.submit(screen.getByRole('button', { name: 'Save changes' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: 'Save' }).closest('form')!);
     expect(update.mutate).toHaveBeenCalledWith(
       { rating: 4, comment: 'Useful examples.' },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
