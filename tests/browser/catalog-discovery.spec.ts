@@ -206,8 +206,34 @@ test('opens a published Catalog course through a successful Course Detail respon
     },
   );
 
-  await page.goto('/');
+  const catalogOrigin = '/?search_query=React&min_price=5&max_price=10&sort=-price&page=3#results';
+  const waitForPageThreeCatalogResponse = () =>
+    page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === 'GET' &&
+        url.pathname === '/courses' &&
+        url.search ===
+          '?page=3&page_size=24&search_query=React&min_price=5&max_price=10&sort=-price' &&
+        response.status() === 200
+      );
+    });
   const courseLink = page.getByRole('link', { name: course.title });
+  const pageThreeCancellation: RequestFailureIdentity = {
+    method: 'GET',
+    path: '/courses?page=3&page_size=24&search_query=React&min_price=5&max_price=10&sort=-price',
+    errorText: 'net::ERR_ABORTED',
+  };
+  await allowOptionalFailureDuringCatalogTransition(
+    assertClean,
+    pageThreeCancellation,
+    async () => {
+      const initialCatalogResponse = waitForPageThreeCatalogResponse();
+      await page.goto(catalogOrigin);
+      await initialCatalogResponse;
+      await expect(courseLink).toBeVisible();
+    },
+  );
   await expect(courseLink).toHaveAttribute('href', `/courses/${course.id}`);
   const detailResponse = page.waitForResponse(
     (response) =>
@@ -228,6 +254,18 @@ test('opens a published Catalog course through a successful Course Detail respon
   await courseLink.click();
   await expect(page).toHaveURL(`/courses/${course.id}`);
   await expect(page.getByRole('heading', { level: 1, name: course.title })).toBeVisible();
+  const returnLink = page.getByRole('link', { name: 'Back to catalog' });
+  await expect(returnLink).toHaveAttribute('href', catalogOrigin);
+  await expect(returnLink).not.toHaveAttribute('target');
+  await returnLink.focus();
+  await expect(returnLink).toBeFocused();
+  const returnBounds = await returnLink.boundingBox();
+  if (!returnBounds) throw new Error('Course Detail contextual return link bounds are missing.');
+  expect(returnBounds.height).toBeGreaterThanOrEqual(44);
+  await expect(page.getByRole('link', { name: 'Catalog', exact: true })).toHaveAttribute(
+    'href',
+    '/',
+  );
   await detailResponse;
   const reviews = await reviewsResponse;
   const reviewsUrl = new URL(reviews.url());
@@ -235,6 +273,17 @@ test('opens a published Catalog course through a successful Course Detail respon
   expect(reviewsUrl.searchParams.get('page_size')).toBe('20');
   expect(detail.requests).not.toEqual([]);
   expect(detail.requests).toEqual(expect.arrayContaining([`GET /courses/${course.id}`]));
+  await allowOptionalFailureDuringCatalogTransition(
+    assertClean,
+    pageThreeCancellation,
+    async () => {
+      const returnedCatalogResponse = waitForPageThreeCatalogResponse();
+      await returnLink.click();
+      await expect(page).toHaveURL(catalogOrigin);
+      await returnedCatalogResponse;
+      await expect(page.getByRole('link', { name: course.title })).toBeVisible();
+    },
+  );
   assertClean();
 });
 

@@ -38005,7 +38005,7 @@
             "functionName": "CatalogPage",
             "argument": "discovery.failure.messageKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:d5565eeb302b625458f8d619bc187cb876ae3833da5d03e28e911d44d65e11f9"
+            "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
           }
         ]
       },
@@ -38018,7 +38018,7 @@
             "functionName": "CatalogPage",
             "argument": "discovery.failure.titleKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:d5565eeb302b625458f8d619bc187cb876ae3833da5d03e28e911d44d65e11f9"
+            "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
           }
         ]
       },
@@ -38031,7 +38031,7 @@
             "functionName": "CatalogPage",
             "argument": "`catalog:${refreshAnnouncement}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:d5565eeb302b625458f8d619bc187cb876ae3833da5d03e28e911d44d65e11f9"
+            "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
           }
         ]
       },
@@ -38056,7 +38056,7 @@
             "functionName": "CourseCard",
             "argument": "`course:${action.feedback.messageKey}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:d8e208529d2a1d5fb1c7cbb851690deb17ef3f06970358b04793d78de7731330"
+            "sourceFingerprint": "sha256:09912527459f5b4dcc03753aadce2ae7795e0bf1efea71a3c260fccc6dae4cf7"
           },
           {
             "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
@@ -38104,7 +38104,7 @@
             "functionName": "CourseCard",
             "argument": "action.labelKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:d8e208529d2a1d5fb1c7cbb851690deb17ef3f06970358b04793d78de7731330"
+            "sourceFingerprint": "sha256:09912527459f5b4dcc03753aadce2ae7795e0bf1efea71a3c260fccc6dae4cf7"
           },
           {
             "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
@@ -38159,7 +38159,7 @@
             "functionName": "CourseDetailPage",
             "argument": "failure.messageKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d"
+            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d"
           }
         ]
       },
@@ -38179,14 +38179,14 @@
             "functionName": "CourseDetailPage",
             "argument": "failure.titleKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d"
+            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d"
           },
           {
             "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
             "functionName": "CourseDetailPage",
             "argument": "failure.titleKey",
             "occurrence": 2,
-            "sourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d"
+            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d"
           }
         ]
       },
@@ -38199,7 +38199,7 @@
             "functionName": "CourseDetailPage",
             "argument": "`course:${recoveryMessage}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d"
+            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d"
           }
         ]
       },
@@ -38921,6 +38921,44 @@
             "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
             "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde",
             "entryCount": 3
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-068",
+          "sources": [
+            {
+              "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+              "expectedSourceFingerprint": "sha256:d5565eeb302b625458f8d619bc187cb876ae3833da5d03e28e911d44d65e11f9"
+            },
+            {
+              "sourcePath": "pages/catalog-page/CourseCard.tsx",
+              "expectedSourceFingerprint": "sha256:d8e208529d2a1d5fb1c7cbb851690deb17ef3f06970358b04793d78de7731330"
+            },
+            {
+              "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+              "expectedSourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:89bcb2c3eeae45c7a1caf2472c6dd59be40319f55b2d6747626d79d16f7db215",
+        "sources": [
+          {
+            "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+            "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "pages/catalog-page/CourseCard.tsx",
+            "sourceFingerprint": "sha256:09912527459f5b4dcc03753aadce2ae7795e0bf1efea71a3c260fccc6dae4cf7",
+            "entryCount": 2
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d",
+            "entryCount": 4
           }
         ]
       }

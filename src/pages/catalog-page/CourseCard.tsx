@@ -36,6 +36,7 @@ type CourseDisclosureCallback = (courseId: number) => void;
 
 interface CourseCardProps {
   course: CatalogCourse;
+  catalogReturnTo: string;
   isDisclosureVisible: boolean;
   isDisclosurePinned: boolean;
   hasPinnedDisclosure: boolean;
@@ -49,6 +50,7 @@ interface CourseCardProps {
 
 export function CourseCard({
   course,
+  catalogReturnTo,
   isDisclosureVisible,
   isDisclosurePinned,
   hasPinnedDisclosure,
@@ -361,6 +363,7 @@ export function CourseCard({
           ref={linkRef}
           className={styles.link}
           to={`/courses/${course.id}`}
+          state={{ returnTo: catalogReturnTo }}
           aria-label={course.title}
           aria-describedby={
             linkDescriptionIds.length > 0 ? linkDescriptionIds.join(' ') : undefined

@@ -10,6 +10,12 @@
   gap: var(--section-spacing);
 }
 
+.contextualSummary {
+  display: grid;
+  gap: var(--spacing-4);
+  min-width: 0;
+}
+
 .loading,
 .state,
 .intro,

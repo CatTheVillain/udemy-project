@@ -37,7 +37,10 @@ export async function waitForHtmlServerReady(origin: string, options: HtmlReadin
     const timeout = setTimeout(() => controller.abort(), Math.min(remainingMs, 5_000));
 
     try {
-      const response = await fetchHtml(`${origin}/`, { signal: controller.signal });
+      const response = await fetchHtml(`${origin}/`, {
+        signal: controller.signal,
+        headers: { connection: 'close' },
+      });
       const html = await response.text();
       if (response.ok && /<html[\s>]/i.test(html) && /<div\s+id=["']root["']/i.test(html)) {
         return;
@@ -65,12 +68,15 @@ export default async function startCourseDetailServer() {
     logLevel: 'warn',
     envFile: false,
     appType: 'spa',
-    server: { host: '127.0.0.1', port: courseDetailPort, strictPort: true },
+    server: {
+      host: '127.0.0.1',
+      port: courseDetailPort,
+      strictPort: true,
+      watch: { ignored: ['**/plans/**', '**/test-results/**'] },
+    },
   });
   try {
     await server.listen();
-    await server.environments.client.warmupRequest('/src/main.tsx');
-    await server.environments.client.waitForRequestsIdle();
     await waitForHtmlServerReady(courseDetailOrigin);
   } catch (error) {
     await server.close();

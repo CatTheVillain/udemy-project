@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 import {
   catalogResultSetKey,
@@ -129,6 +129,7 @@ function restoreBrowserSelectedFocus(target: HTMLElement) {
 
 export function CatalogPage() {
   const { t, i18n } = useTranslation();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const pendingPriceBlurSourceRef = useRef<HTMLInputElement | null>(null);
   const pendingPriceBlurTargetRef = useRef<HTMLElement | null>(null);
@@ -527,6 +528,7 @@ export function CatalogPage() {
                     <CourseCard
                       key={course.id}
                       course={course}
+                      catalogReturnTo={`${location.pathname}${location.search}${location.hash}`}
                       isDisclosureVisible={visibleDisclosureCourseId === course.id}
                       isDisclosurePinned={pinnedDisclosureCourseId === course.id}
                       hasPinnedDisclosure={pinnedDisclosureCourseId !== null}

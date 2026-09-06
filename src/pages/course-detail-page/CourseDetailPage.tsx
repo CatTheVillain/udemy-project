@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
+import { ChevronLeft } from 'lucide-react';
 
 import { courseDetailFailure, useCourseDetail } from '@features/course-detail';
 import { CourseReviews } from '@features/course-reviews';
-import { useSession } from '@features/auth-session';
+import { sanitizeInternalReturnTo, useSession } from '@features/auth-session';
+import { parseCatalogQuery, serializeCatalogQuery } from '@features/catalog-discovery';
 import {
   Button,
   ContextualNavigationLink,
@@ -32,6 +34,67 @@ interface CourseRetryFocusIntent {
   readonly target: CourseRecoveryTarget;
 }
 
+interface CourseCatalogReturnNavigationState {
+  readonly returnTo: string;
+}
+
+const COURSE_CATALOG_RETURN_FALLBACK_ORIGIN = 'http://localhost';
+
+function isExactCanonicalCatalogReturnInput(
+  returnTo: string,
+  origin: string,
+  canonicalTarget: string,
+): boolean {
+  return returnTo === canonicalTarget || returnTo === `${origin}${canonicalTarget}`;
+}
+
+function getExactCourseCatalogReturnTo(
+  state: unknown,
+): CourseCatalogReturnNavigationState['returnTo'] | null {
+  if (!state || typeof state !== 'object') return null;
+
+  try {
+    if (Array.isArray(state)) return null;
+
+    const ownKeys = Reflect.ownKeys(state);
+    if (ownKeys.length !== 1 || ownKeys[0] !== 'returnTo') return null;
+
+    const returnToDescriptor = Object.getOwnPropertyDescriptor(state, 'returnTo');
+    if (!returnToDescriptor || !('value' in returnToDescriptor)) return null;
+
+    return typeof returnToDescriptor.value === 'string' ? returnToDescriptor.value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveCourseCatalogReturnTarget(state: unknown): string {
+  const returnTo = getExactCourseCatalogReturnTo(state);
+  if (returnTo === null) return '/';
+
+  const origin = globalThis.location?.origin ?? COURSE_CATALOG_RETURN_FALLBACK_ORIGIN;
+
+  try {
+    const url = new URL(returnTo, origin);
+    const canonicalSearch = serializeCatalogQuery(parseCatalogQuery(url.searchParams));
+    const expectedSearch = canonicalSearch ? `?${canonicalSearch}` : '';
+    const canonicalTarget = `/${url.search}${url.hash}`;
+    if (
+      url.origin !== origin ||
+      url.pathname !== '/' ||
+      url.search !== expectedSearch ||
+      !isExactCanonicalCatalogReturnInput(returnTo, origin, canonicalTarget)
+    )
+      return '/';
+
+    return sanitizeInternalReturnTo(canonicalTarget, origin) === canonicalTarget
+      ? canonicalTarget
+      : '/';
+  } catch {
+    return '/';
+  }
+}
+
 function CourseNotFound() {
   const { t } = useTranslation();
   return (
@@ -50,6 +113,7 @@ function CourseNotFound() {
 export function CourseDetailPage() {
   const { t } = useTranslation();
   const { courseId: courseIdParam } = useParams();
+  const location = useLocation();
   const courseId = parseCourseId(courseIdParam);
   const session = useSession();
   const { action, detail, mutationState, outline, preflight, retryPreflight, submitAction } =
@@ -127,6 +191,7 @@ export function CourseDetailPage() {
   }
 
   const course = detail.data;
+  const catalogReturnTarget = resolveCourseCatalogReturnTarget(location.state);
   const isDraft = course.publishedAt === null;
   const description =
     course.description ??
@@ -146,46 +211,52 @@ export function CourseDetailPage() {
           })}
         </VisuallyHidden>
       ) : null}
-      <header className={styles.summary}>
-        <div className={styles.intro}>
-          <p className={styles.eyebrow}>
-            {isDraft
-              ? t('course:draftCourse')
-              : t('routes:courseDetailsTitle', { defaultValue: 'Course details' })}
-          </p>
-          <h1 ref={detailHeadingRef} className={styles.recoveryTarget} tabIndex={-1}>
-            {course.title}
-          </h1>
-          <p className={styles.description}>{description}</p>
-          <dl className={styles.metadata}>
-            <div>
-              <dt>{t('course:instructor', { defaultValue: 'Instructor' })}</dt>
-              <dd>{course.instructorName}</dd>
-            </div>
-            <div>
-              <dt>{t('course:totalLessons', { defaultValue: 'Total lessons' })}</dt>
-              <dd>{outline.data?.total ?? course.lessons.length}</dd>
-            </div>
-            <div>
-              <dt>{t('course:status', { defaultValue: 'Status' })}</dt>
-              <dd>
-                {isDraft
-                  ? t('course:draft', { defaultValue: 'Draft' })
-                  : t('course:published', { defaultValue: 'Published' })}
-              </dd>
-            </div>
-          </dl>
-        </div>
-        <CourseActionPanel
-          action={action}
-          course={course}
-          isDraft={isDraft}
-          mutationState={mutationState}
-          preflight={preflight}
-          onRetryPreflight={() => void retryPreflight()}
-          onSubmitAction={submitAction}
-        />
-      </header>
+      <div className={styles.contextualSummary}>
+        <ContextualNavigationLink to={catalogReturnTarget}>
+          <ChevronLeft size={20} aria-hidden="true" />
+          {t('routes:backToCatalog', { defaultValue: 'Back to catalog' })}
+        </ContextualNavigationLink>
+        <header className={styles.summary}>
+          <div className={styles.intro}>
+            <p className={styles.eyebrow}>
+              {isDraft
+                ? t('course:draftCourse')
+                : t('routes:courseDetailsTitle', { defaultValue: 'Course details' })}
+            </p>
+            <h1 ref={detailHeadingRef} className={styles.recoveryTarget} tabIndex={-1}>
+              {course.title}
+            </h1>
+            <p className={styles.description}>{description}</p>
+            <dl className={styles.metadata}>
+              <div>
+                <dt>{t('course:instructor', { defaultValue: 'Instructor' })}</dt>
+                <dd>{course.instructorName}</dd>
+              </div>
+              <div>
+                <dt>{t('course:totalLessons', { defaultValue: 'Total lessons' })}</dt>
+                <dd>{outline.data?.total ?? course.lessons.length}</dd>
+              </div>
+              <div>
+                <dt>{t('course:status', { defaultValue: 'Status' })}</dt>
+                <dd>
+                  {isDraft
+                    ? t('course:draft', { defaultValue: 'Draft' })
+                    : t('course:published', { defaultValue: 'Published' })}
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <CourseActionPanel
+            action={action}
+            course={course}
+            isDraft={isDraft}
+            mutationState={mutationState}
+            preflight={preflight}
+            onRetryPreflight={() => void retryPreflight()}
+            onSubmitAction={submitAction}
+          />
+        </header>
+      </div>
 
       <CourseOutline
         error={outline.error}

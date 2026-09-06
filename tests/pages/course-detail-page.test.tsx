@@ -19,7 +19,10 @@ import {
   type SessionContextValue,
 } from '../../src/features/auth-session';
 import * as authSession from '../../src/features/auth-session';
-import { CourseDetailPage } from '../../src/pages/course-detail-page';
+import {
+  CourseDetailPage,
+  resolveCourseCatalogReturnTarget,
+} from '../../src/pages/course-detail-page/CourseDetailPage';
 import { CourseActionPanel } from '../../src/pages/course-detail-page/CourseActionPanel';
 import courseDetailStyles from '../../src/pages/course-detail-page/CourseDetailPage.module.css';
 import {
@@ -404,10 +407,17 @@ function PageHarnessControls({ sessionControls, routeControls }: PageHarnessOpti
   );
 }
 
+interface CourseDetailRouteEntry {
+  readonly pathname: string;
+  readonly state: unknown;
+}
+
+type CourseDetailInitialEntry = string | CourseDetailRouteEntry;
+
 function renderPage(
   request: ApiClient['request'],
   token: string | null = null,
-  path = '/courses/7',
+  path: CourseDetailInitialEntry = '/courses/7',
   options: PageHarnessOptions = {},
 ) {
   const queryClient = createAppQueryClient();
@@ -442,6 +452,247 @@ afterEach(() => {
 });
 
 describe('CourseDetailPage', () => {
+  it.each([
+    {
+      name: 'accepts a complete canonical Catalog return target and retains its fragment',
+      state: {
+        returnTo: '/?search_query=React&min_price=5&max_price=10&sort=-price&page=3#results',
+      },
+      href: '/?search_query=React&min_price=5&max_price=10&sort=-price&page=3#results',
+    },
+    {
+      name: 'accepts a same-origin absolute canonical Catalog return target',
+      state: {
+        returnTo: `${globalThis.location.origin}/?search_query=React&min_price=5&max_price=10&sort=-price&page=3#results`,
+      },
+      href: '/?search_query=React&min_price=5&max_price=10&sort=-price&page=3#results',
+    },
+    { name: 'fails closed for absent state', state: undefined, href: '/' },
+    { name: 'fails closed for a null state', state: null, href: '/' },
+    { name: 'fails closed for a primitive state', state: 'catalog', href: '/' },
+    { name: 'fails closed for an array state', state: [{ returnTo: '/' }], href: '/' },
+    {
+      name: 'fails closed for an inherited return target',
+      state: Object.create({ returnTo: '/?page=3' }),
+      href: '/',
+    },
+    { name: 'fails closed for a non-string return target', state: { returnTo: 3 }, href: '/' },
+    {
+      name: 'fails closed for an extra state key',
+      state: { returnTo: '/?page=3', extra: true },
+      href: '/',
+    },
+    {
+      name: 'fails closed for a non-enumerable extra own state key',
+      state: Object.defineProperty({ returnTo: '/?page=3' }, 'extra', { value: true }),
+      href: '/',
+    },
+    {
+      name: 'fails closed for a symbol extra own state key',
+      state: { returnTo: '/?page=3', [Symbol('extra')]: true },
+      href: '/',
+    },
+    {
+      name: 'fails closed for an external return target',
+      state: { returnTo: 'https://evil.test/' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for a protocol-relative target',
+      state: { returnTo: '//evil.test/' },
+      href: '/',
+    },
+    { name: 'fails closed for a backslash target', state: { returnTo: '\\evil.test/' }, href: '/' },
+    {
+      name: 'fails closed for a credentialed target',
+      state: { returnTo: 'https://user@evil.test/' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for unknown Catalog query state',
+      state: { returnTo: '/?unknown=value' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for duplicate query dimensions',
+      state: { returnTo: '/?page=3&page=3' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for an inverted price range',
+      state: { returnTo: '/?min_price=10&max_price=5' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for a malformed price',
+      state: { returnTo: '/?min_price=abc' },
+      href: '/',
+    },
+    { name: 'fails closed for an invalid page', state: { returnTo: '/?page=0' }, href: '/' },
+    {
+      name: 'fails closed for an invalid sort',
+      state: { returnTo: '/?sort=unexpected' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for noncanonical query order',
+      state: { returnTo: '/?page=3&sort=-price' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for noncanonical query encoding',
+      state: { returnTo: '/?search_query=React%20Basics' },
+      href: '/',
+    },
+    { name: 'fails closed for a non-Catalog path', state: { returnTo: '/courses/7' }, href: '/' },
+    {
+      name: 'fails closed for a literal parent dot-segment path',
+      state: { returnTo: '/foo/..?page=3#results' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for a literal current dot-segment path',
+      state: { returnTo: '/./?page=3#results' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for a percent-encoded parent dot-segment path',
+      state: { returnTo: '/%2e%2e?page=3#results' },
+      href: '/',
+    },
+    {
+      name: 'fails closed for an absolute literal parent dot-segment path',
+      state: { returnTo: `${globalThis.location.origin}/foo/..?page=3#results` },
+      href: '/',
+    },
+    {
+      name: 'fails closed for an absolute percent-encoded parent dot-segment path',
+      state: { returnTo: `${globalThis.location.origin}/%2e%2e?page=3#results` },
+      href: '/',
+    },
+    {
+      name: 'fails closed for a wrong-shaped state',
+      state: { returnTo: '/?page=3', unexpected: true },
+      href: '/',
+    },
+  ])('$name', async ({ state, href }) => {
+    const request: ApiClient['request'] = async <TResponse, TBody>(
+      options: ApiRequestOptions<TBody, TResponse>,
+    ) => {
+      if (options.path === '/courses/7') return decode(options, course);
+      if (options.path === '/courses/7/lessons') return decode(options, outline(null));
+      if (options.path === '/courses/7/reviews')
+        return decode(options, {
+          items: [],
+          page: 1,
+          page_size: 20,
+          total: 0,
+          pages: 0,
+          has_next: false,
+          has_previous: false,
+        });
+      throw new Error(`Unexpected request ${options.path}`);
+    };
+
+    renderPage(request, null, { pathname: '/courses/7', state });
+
+    const returnLink = await screen.findByRole('link', { name: 'Back to catalog' });
+    expect(returnLink.getAttribute('href')).toBe(href);
+    expect(returnLink.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
+  });
+
+  it('fails closed without invoking a hostile return target accessor', () => {
+    let getterWasInvoked = false;
+    const state = Object.defineProperty({}, 'returnTo', {
+      enumerable: true,
+      get: () => {
+        getterWasInvoked = true;
+        throw new Error('hostile route state getter');
+      },
+    });
+
+    expect(resolveCourseCatalogReturnTarget(state)).toBe('/');
+    expect(getterWasInvoked).toBe(false);
+  });
+
+  it('fails closed without invoking a hostile route-state get trap', () => {
+    let getTrapWasInvoked = false;
+    const state = new Proxy(
+      { returnTo: '/?page=3', extra: true },
+      {
+        get: () => {
+          getTrapWasInvoked = true;
+          throw new Error('hostile route state get trap');
+        },
+      },
+    );
+
+    expect(resolveCourseCatalogReturnTarget(state)).toBe('/');
+    expect(getTrapWasInvoked).toBe(false);
+  });
+
+  it('fails closed when route-state key introspection throws', () => {
+    const state = new Proxy(
+      { returnTo: '/' },
+      {
+        ownKeys: () => {
+          throw new Error('hostile route state ownKeys trap');
+        },
+      },
+    );
+
+    expect(resolveCourseCatalogReturnTarget(state)).toBe('/');
+  });
+
+  it('fails closed for a revoked route-state proxy', () => {
+    const { proxy, revoke } = Proxy.revocable({ returnTo: '/' }, {});
+    revoke();
+
+    expect(resolveCourseCatalogReturnTarget(proxy)).toBe('/');
+  });
+
+  it.each([
+    ['en', 'Back to catalog'],
+    ['ru', 'Вернуться в каталог'],
+    ['uz', 'Katalogga qaytish'],
+  ] as const)(
+    'renders exactly one localized contextual link before the unchanged eyebrow in %s',
+    async (locale, label) => {
+      await localeRuntime.changeLanguage(locale);
+      const request: ApiClient['request'] = async <TResponse, TBody>(
+        options: ApiRequestOptions<TBody, TResponse>,
+      ) => {
+        if (options.path === '/courses/7') return decode(options, course);
+        if (options.path === '/courses/7/lessons') return decode(options, outline(null));
+        if (options.path === '/courses/7/reviews')
+          return decode(options, {
+            items: [],
+            page: 1,
+            page_size: 20,
+            total: 0,
+            pages: 0,
+            has_next: false,
+            has_previous: false,
+          });
+        throw new Error(`Unexpected request ${options.path}`);
+      };
+      renderPage(request);
+      const links = await screen.findAllByRole('link', { name: label });
+      expect(links).toHaveLength(1);
+      const eyebrow = screen.getByText(
+        locale === 'en'
+          ? 'Course details'
+          : locale === 'ru'
+            ? 'Сведения о курсе'
+            : 'Kurs tafsilotlari',
+      );
+      expect(
+        links[0].compareDocumentPosition(eyebrow) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(links[0].querySelector('svg[aria-hidden="true"]')).toBeTruthy();
+    },
+  );
+
   it('keeps the not-found recovery typography and active violet in its bounded local rules', () => {
     const recoveryRule = cssDeclarationBlock(
       COURSE_DETAIL_STYLES,

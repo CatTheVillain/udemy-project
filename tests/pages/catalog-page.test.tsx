@@ -106,7 +106,7 @@ function HistoryControls() {
       <button type="button" onClick={() => navigate(1)}>
         Forward
       </button>
-      <output aria-label="catalog location">{`${location.pathname}${location.search}`}</output>
+      <output aria-label="catalog location">{`${location.pathname}${location.search}${location.hash}`}</output>
     </>
   );
 }

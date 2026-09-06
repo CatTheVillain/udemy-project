@@ -480,6 +480,85 @@ async function routeStudentReads(page: Page, price = '0.00') {
   await page.route('**/enrollments/my**', (route) => json(route, emptyEnrollments));
 }
 
+test('fails closed for direct and malformed Catalog return state while preserving native responsive link behavior', async ({
+  page,
+}) => {
+  const diagnostics = await installDiagnostics(page);
+  await page.route('**/courses/7**', async (route) => {
+    if (isDocumentNavigation(route)) return route.fallback();
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/courses/7/reviews') return json(route, emptyReviewPage);
+    if (path === '/courses/7/reviews/me') return json(route, { detail: 'Review not found' }, 404);
+    await json(route, path.endsWith('/lessons') ? outline(null) : detail);
+  });
+
+  await page.goto('/courses/7', { waitUntil: 'domcontentloaded' });
+  const returnLink = page.getByRole('link', { name: 'Back to catalog' });
+  await expect(returnLink).toHaveAttribute('href', '/');
+
+  await page.evaluate(() => {
+    history.replaceState(
+      { ...history.state, usr: { returnTo: 'https://attacker.example/' } },
+      '',
+      location.href,
+    );
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(returnLink).toHaveAttribute('href', '/');
+
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(returnLink).toBeVisible();
+    await returnLink.focus();
+    await expect(returnLink).toBeFocused();
+    const geometry = await returnLink.evaluate((element) => {
+      const link = element.getBoundingClientRect();
+      const summary = document
+        .querySelector<HTMLElement>('[class*="summary"]')
+        ?.getBoundingClientRect();
+      const eyebrow = document
+        .querySelector<HTMLElement>('[class*="eyebrow"]')
+        ?.getBoundingClientRect();
+      return {
+        height: link.height,
+        linkBottom: link.bottom,
+        summaryTop: summary?.top ?? null,
+        eyebrowTop: eyebrow?.top ?? null,
+      };
+    });
+    expect(geometry.height).toBeGreaterThanOrEqual(44);
+    expect(geometry.summaryTop).not.toBeNull();
+    expect(Math.abs(geometry.summaryTop! - geometry.linkBottom - 16)).toBeLessThanOrEqual(0.5);
+    expect(geometry.eyebrowTop).not.toBeNull();
+    expect(geometry.linkBottom).toBeLessThanOrEqual(geometry.eyebrowTop!);
+    await expectNoHorizontalOverflow(page);
+  }
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(returnLink).not.toHaveAttribute('target');
+  let modifierPage: Page | undefined;
+  try {
+    [modifierPage] = await Promise.all([
+      page.context().waitForEvent('page', { timeout: 3_000 }),
+      returnLink.click({ modifiers: ['Control'] }),
+    ]);
+    await expect(modifierPage).toHaveURL(/\/$/);
+  } finally {
+    await modifierPage?.close();
+  }
+  let middlePage: Page | undefined;
+  try {
+    [middlePage] = await Promise.all([
+      page.context().waitForEvent('page', { timeout: 3_000 }),
+      returnLink.click({ button: 'middle' }),
+    ]);
+    await expect(middlePage).toHaveURL(/\/$/);
+  } finally {
+    await middlePage?.close();
+  }
+  diagnostics.assertClean();
+});
+
 test('renders populated/redacted/null API-014 fixtures as metadata only with no media request', async ({
   page,
 }) => {
