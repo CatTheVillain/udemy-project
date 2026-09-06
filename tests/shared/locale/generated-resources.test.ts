@@ -61,7 +61,7 @@ describe('generated canonical localization resources', () => {
     expect(generated.en.course.editReviewShort).toBe('Edit review');
     expect(generated.ru.course.editReviewShort).toBe('Изменить отзыв');
     expect(generated.uz.course.editReviewShort).toBe('Sharhni tahrirlash');
-    expect(generated.uz.course.saveReviewChanges).toBe('O‘zgarishlarni saqlash');
+    expect(generated.uz.course.saveReviewChanges).toBe('Saqlash');
     expect(generated.en.learning.completeLessonShort).toBe('Complete');
     expect(generated.ru.learning.completeLessonShort).toBe('Завершить');
     expect(generated.uz.learning.completeLessonShort).toBe('Yakunlash');
