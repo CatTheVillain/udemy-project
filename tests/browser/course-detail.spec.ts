@@ -1784,10 +1784,55 @@ test('keeps authenticated review CRUD recoverable without raw server detail and 
   const fourStarTarget = fourStars.locator('xpath=..');
   await expect(fourStarTarget).toHaveCSS('width', '44px');
   await expect(fourStarTarget).toHaveCSS('height', '44px');
+  const ratingVisuals = ratingGroup.locator('[data-rating-state]');
+  await expect(ratingVisuals).toHaveCount(5);
+  await expect(ratingVisuals.nth(0)).toHaveAttribute('data-rating-state', 'neutral');
+  const stableStarCount = await ratingVisuals.locator('svg').count();
+  await fiveStars.locator('xpath=..').hover();
+  await expect(ratingVisuals.nth(4)).toHaveAttribute('data-rating-state', 'preview');
+  await expect(ratingVisuals.nth(4).locator('svg')).toHaveCSS('fill', 'rgb(245, 158, 11)');
+  await expect(ratingVisuals.nth(4).locator('svg')).toHaveCSS('stroke', 'rgb(245, 158, 11)');
+  await fourStarTarget.hover();
+  await expect(ratingVisuals.nth(3)).toHaveAttribute('data-rating-state', 'preview');
+  await expect(ratingVisuals.nth(4)).toHaveAttribute('data-rating-state', 'neutral');
+  await fourStarTarget.click();
+  await expect(fourStars).toBeChecked();
+  await expect(ratingVisuals.nth(0)).toHaveAttribute('data-rating-state', 'committed');
+  await expect(ratingVisuals.nth(3).locator('svg')).toHaveCSS('fill', 'rgb(250, 204, 21)');
+  await expect(ratingVisuals.nth(3).locator('svg')).toHaveCSS('stroke', 'rgb(250, 204, 21)');
+  expect(await ratingVisuals.locator('svg').count()).toBe(stableStarCount);
   await fourStars.focus();
   await fourStars.press('Space');
   await expect(fourStars).toBeChecked();
   expect(await fourStars.evaluate((control) => control.matches(':focus-visible'))).toBe(true);
+  await fiveStars.focus();
+  await expect(ratingVisuals.nth(4)).toHaveAttribute('data-rating-state', 'preview');
+  await expect(ratingVisuals.nth(4).locator('svg')).toHaveCSS('fill', 'rgb(245, 158, 11)');
+  const fourStarBounds = await fourStarTarget.boundingBox();
+  expect(fourStarBounds).not.toBeNull();
+  await page.mouse.move(fourStarBounds!.x + 1, fourStarBounds!.y + 1);
+  await expect(ratingVisuals.nth(3)).toHaveAttribute('data-rating-state', 'preview');
+  await expect(ratingVisuals.nth(4)).toHaveAttribute('data-rating-state', 'neutral');
+  const ratingGroupBounds = await ratingGroup.boundingBox();
+  expect(ratingGroupBounds).not.toBeNull();
+  await page.mouse.move(fourStarBounds!.x + 1, fourStarBounds!.y + 1);
+  await page.mouse.down();
+  await page.mouse.move(
+    ratingGroupBounds!.x + ratingGroupBounds!.width + 48,
+    fourStarBounds!.y + 1,
+  );
+  await page.mouse.up();
+  await fiveStars.focus();
+  await expect(ratingVisuals.nth(4)).toHaveAttribute('data-rating-state', 'preview');
+  await fiveStars.press('Space');
+  await expect(fiveStars).toBeChecked();
+  await expect(ratingVisuals.nth(4)).toHaveAttribute('data-rating-state', 'committed');
+  await fourStars.focus();
+  await fourStars.press('Space');
+  await expect(fourStars).toBeChecked();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(ratingVisuals.nth(4).locator('svg')).toHaveCSS('transition-duration', '0s');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
 
   const comment = page.getByLabel('What did you like?');
   await expect(comment).toHaveAttribute('maxlength', '1000');
@@ -1843,6 +1888,9 @@ test('keeps authenticated review CRUD recoverable without raw server detail and 
   await page.getByRole('button', { name: 'Save review' }).click();
   await expect(page.getByRole('heading', { level: 3, name: 'Your review' })).toBeVisible();
   await expect(page.getByText('Clear and useful.')).toHaveCount(1);
+  const ownedReviewStars = page.getByRole('img', { name: 'Rating: 5/5' }).locator('svg');
+  await expect(ownedReviewStars.nth(4)).toHaveCSS('fill', 'rgb(250, 204, 21)');
+  await expect(ownedReviewStars.nth(4)).toHaveCSS('stroke', 'rgb(250, 204, 21)');
   await expect(page.getByRole('button', { name: 'Edit your review' })).toHaveText('Edit review');
   await expect(page.getByRole('heading', { level: 3, name: 'Edit your review' })).toHaveCount(0);
   const reviewsHeading = page.getByRole('heading', { level: 2, name: 'Reviews' });
@@ -1871,7 +1919,7 @@ test('keeps authenticated review CRUD recoverable without raw server detail and 
   await expect(cancelReviewEdit).toHaveCSS('color', reviewActionColors.foreground);
   await cancelReviewEdit.hover();
   await expect(cancelReviewEdit).toHaveCSS('background-color', reviewActionColors.hoverBackground);
-  await page.getByRole('button', { name: 'Save changes' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.locator('body')).not.toContainText('distinctive update detail');
   await page.getByRole('button', { name: 'Cancel' }).click();
   await page.getByRole('button', { name: 'Delete review' }).click();

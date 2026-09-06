@@ -512,7 +512,7 @@ export const GENERATED_LOCALE_RESOURCES = {
       "yourReview": "Your review",
       "courseReviewsHeading": "Course reviews",
       "editReviewShort": "Edit review",
-      "saveReviewChanges": "Save changes"
+      "saveReviewChanges": "Save"
     },
     "instructor": {
       "courseEditorSaveThisCourse": "save this course",
@@ -1143,7 +1143,7 @@ export const GENERATED_LOCALE_RESOURCES = {
       "yourReview": "Ваш отзыв",
       "courseReviewsHeading": "Отзывы о курсе",
       "editReviewShort": "Изменить отзыв",
-      "saveReviewChanges": "Сохранить изменения"
+      "saveReviewChanges": "Сохранить"
     },
     "instructor": {
       "courseEditorSaveThisCourse": "сохранить этот курс",
@@ -1770,7 +1770,7 @@ export const GENERATED_LOCALE_RESOURCES = {
       "yourReview": "Sizning sharhingiz",
       "courseReviewsHeading": "Kurs haqidagi sharhlar",
       "editReviewShort": "Sharhni tahrirlash",
-      "saveReviewChanges": "O‘zgarishlarni saqlash"
+      "saveReviewChanges": "Saqlash"
     },
     "instructor": {
       "courseEditorSaveThisCourse": "bu kursni saqlash",

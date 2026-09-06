@@ -89,6 +89,11 @@
   line-height: var(--type-label-lh);
 }
 .ratingOptions {
+  --review-rating-neutral: var(--text-muted);
+  --review-rating-committed: #facc15;
+  --review-rating-preview: #f59e0b;
+  --review-rating-transition: 120ms cubic-bezier(0.2, 0, 0, 1);
+
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-1);
@@ -112,19 +117,33 @@
   place-items: center;
   width: 32px;
   height: 32px;
-  color: var(--text-muted);
+  color: var(--review-rating-neutral);
   border-radius: var(--radius-sm);
 }
-.ratingVisualSelected,
-.reviewStarSelected {
-  color: var(--rating-emphasis);
+.ratingVisual svg {
+  fill: transparent;
+  stroke: var(--review-rating-neutral);
+  transition:
+    color var(--review-rating-transition),
+    fill var(--review-rating-transition),
+    stroke var(--review-rating-transition);
 }
-.ratingOption:hover .ratingVisual {
-  color: var(--rating-emphasis);
+.ratingVisual[data-rating-state='committed'] svg {
+  fill: var(--review-rating-committed);
+  stroke: var(--review-rating-committed);
+}
+.ratingVisual[data-rating-state='preview'] svg {
+  fill: var(--review-rating-preview);
+  stroke: var(--review-rating-preview);
 }
 .ratingInput:focus-visible + .ratingVisual {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ratingVisual svg {
+    transition-duration: 0ms;
+  }
 }
 .reviewList {
   display: grid;
@@ -192,7 +211,16 @@
 }
 .reviewStars {
   gap: var(--spacing-1);
-  color: var(--text-muted);
+  --review-rating-neutral: var(--text-muted);
+  --review-rating-committed: #facc15;
+}
+.reviewStars svg {
+  fill: transparent;
+  stroke: var(--review-rating-neutral);
+}
+.reviewStars .reviewStarSelected {
+  fill: var(--review-rating-committed);
+  stroke: var(--review-rating-committed);
 }
 .actions {
   display: flex;

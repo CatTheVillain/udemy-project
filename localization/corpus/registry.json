@@ -36806,8 +36806,8 @@
       "id": "MLUX-C0566",
       "namespace": "course",
       "key": "saveReviewChanges",
-      "english": "Save changes",
-      "sourceRevision": "sha256:cedc6c9948b8c43c8602be4b0bac9195b14b869d3d8c3a37ce4ad76034f0cb1d",
+      "english": "Save",
+      "sourceRevision": "sha256:eaa367d179a5eb0436da75b0185d0d4f4fffd973522a77db239bccf722445b11",
       "unitLifecycle": "active",
       "occurrences": [
         {
@@ -36824,27 +36824,51 @@
       "pluralForms": null,
       "locales": {
         "ru": {
-          "candidate": "Сохранить изменения",
+          "candidate": "Сохранить",
           "status": "draft",
           "reviewerId": null,
           "verdict": null,
           "requestedAt": null,
           "reviewedAt": null,
           "approvalRecordedAt": null,
-          "history": [],
-          "sourceRevision": "sha256:cedc6c9948b8c43c8602be4b0bac9195b14b869d3d8c3a37ce4ad76034f0cb1d",
+          "history": [
+            {
+              "type": "source_revision",
+              "previousSourceRevision": "sha256:cedc6c9948b8c43c8602be4b0bac9195b14b869d3d8c3a37ce4ad76034f0cb1d",
+              "sourceRevision": "sha256:eaa367d179a5eb0436da75b0185d0d4f4fffd973522a77db239bccf722445b11"
+            },
+            {
+              "type": "draft_reset",
+              "previousCandidate": "Сохранить изменения",
+              "nextCandidate": "Сохранить",
+              "sourceRevision": "sha256:eaa367d179a5eb0436da75b0185d0d4f4fffd973522a77db239bccf722445b11"
+            }
+          ],
+          "sourceRevision": "sha256:eaa367d179a5eb0436da75b0185d0d4f4fffd973522a77db239bccf722445b11",
           "approvalAuthority": null
         },
         "uz": {
-          "candidate": "O‘zgarishlarni saqlash",
+          "candidate": "Saqlash",
           "status": "draft",
           "reviewerId": null,
           "verdict": null,
           "requestedAt": null,
           "reviewedAt": null,
           "approvalRecordedAt": null,
-          "history": [],
-          "sourceRevision": "sha256:cedc6c9948b8c43c8602be4b0bac9195b14b869d3d8c3a37ce4ad76034f0cb1d",
+          "history": [
+            {
+              "type": "source_revision",
+              "previousSourceRevision": "sha256:cedc6c9948b8c43c8602be4b0bac9195b14b869d3d8c3a37ce4ad76034f0cb1d",
+              "sourceRevision": "sha256:eaa367d179a5eb0436da75b0185d0d4f4fffd973522a77db239bccf722445b11"
+            },
+            {
+              "type": "draft_reset",
+              "previousCandidate": "O‘zgarishlarni saqlash",
+              "nextCandidate": "Saqlash",
+              "sourceRevision": "sha256:eaa367d179a5eb0436da75b0185d0d4f4fffd973522a77db239bccf722445b11"
+            }
+          ],
+          "sourceRevision": "sha256:eaa367d179a5eb0436da75b0185d0d4f4fffd973522a77db239bccf722445b11",
           "approvalAuthority": null
         }
       },
