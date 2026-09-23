@@ -40,8 +40,12 @@
       "prettier --check",
       "eslint --max-warnings 0"
     ],
-    "src/shared/locale/generated-resources.ts": ["eslint --max-warnings 0"],
-    "localization/corpus/registry.json": ["prettier --check"],
+    "src/shared/locale/generated-resources.ts": [
+      "eslint --max-warnings 0"
+    ],
+    "localization/corpus/registry.json": [
+      "prettier --check"
+    ],
     "*.css": [
       "prettier --check",
       "stylelint --max-warnings 0"

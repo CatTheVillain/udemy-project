@@ -37764,1384 +37764,1328 @@
     }
   ],
   "consumerGrammar": {
-                       "version": 1,
-                       "translatorWrappers": [
-                         {
-                           "sourcePath": "app/router/RouteErrorBoundary.tsx",
-                           "functionName": "resolveApplicationTitle",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
-                         },
-                         {
-                           "sourcePath": "features/auth-workflows/validation.ts",
-                           "functionName": "resolveAuthMessage",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:f56725b0f7c8420ef397beea5e10ba477ece7afcb36816d6d50d276d26fc23a1"
-                         },
-                         {
-                           "sourcePath": "features/instructor-course-editor/validation.ts",
-                           "functionName": "resolveInstructorEditorFailureMessage",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
-                         },
-                         {
-                           "sourcePath": "pages/cart-page/CartPage.tsx",
-                           "functionName": "CartRecoveryAction",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                         },
-                         {
-                           "sourcePath": "pages/cart-page/CartPage.tsx",
-                           "functionName": "mutationStatusMessage",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                         },
-                         {
-                           "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
-                           "functionName": "actionNotice",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
-                         },
-                         {
-                           "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                           "functionName": "interpolateInstructorTemplate",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde"
-                         },
-                         {
-                           "sourcePath": "pages/instructor-course-enrollments-page/InstructorCourseEnrollmentsPage.tsx",
-                           "functionName": "enrollmentStatusLabel",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:6cffc42ea9f3835bf55b873cd6135b885476aa79312e251a440b51f2ec85695b"
-                         },
-                         {
-                           "sourcePath": "pages/instructor-course-enrollments-page/InstructorCourseEnrollmentsPage.tsx",
-                           "functionName": "failure",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:6cffc42ea9f3835bf55b873cd6135b885476aa79312e251a440b51f2ec85695b"
-                         },
-                         {
-                           "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
-                           "functionName": "collectionFailure",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:9f6ce1e72b63ea3140e14f5c6878ad21543093bc6526c8cbd171342e92b14e57"
-                         },
-                         {
-                           "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
-                           "functionName": "uploadRule",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:c938607eb1be97d14eab0b72279836f75a885fd3d3979e18b906d65ad8ca9e6a"
-                         },
-                         {
-                           "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                           "functionName": "AssistantResponseError",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
-                         },
-                         {
-                           "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                           "functionName": "AssistantTypingIndicator",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
-                         },
-                         {
-                           "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                           "functionName": "errorCopy",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
-                         }
-                       ],
-                       "translatorForwarders": [
-                         {
-                           "sourcePath": "features/auth-workflows/validation.ts",
-                           "functionName": "resolveAuthFieldErrors",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:f56725b0f7c8420ef397beea5e10ba477ece7afcb36816d6d50d276d26fc23a1"
-                         },
-                         {
-                           "sourcePath": "features/instructor-course-editor/validation.ts",
-                           "functionName": "resolveInstructorEditorFormFailure",
-                           "bindingName": "t",
-                           "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
-                         }
-                       ],
-                       "dynamicKeyFamilies": [
-                         {
-                           "id": "account-role-labels",
-                           "unitIds": [
-                             "MLUX-C0286",
-                             "MLUX-C0285",
-                             "MLUX-C0164"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "app/layouts/AccountMenu.tsx",
-                               "functionName": "AccountMenu",
-                               "argument": "rolePresentation.labelKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:c5a17333cf192b5f53048b85f381c0036e5c46240b3570945da2a444cb42f0bb"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "auth-field-labels",
-                           "unitIds": [
-                             "MLUX-C0292",
-                             "MLUX-C0180",
-                             "MLUX-C0290",
-                             "MLUX-C0291",
-                             "MLUX-C0279",
-                             "MLUX-C0277",
-                             "MLUX-C0287"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "features/auth-workflows/validation.ts",
-                               "functionName": "resolveAuthMessage",
-                               "argument": "`auth:${message.fieldLabel}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:f56725b0f7c8420ef397beea5e10ba477ece7afcb36816d6d50d276d26fc23a1"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "cart-failure-message",
-                           "unitIds": [
-                             "MLUX-C0514",
-                             "MLUX-C0510",
-                             "MLUX-C0509",
-                             "MLUX-C0512",
-                             "MLUX-C0471",
-                             "MLUX-C0474",
-                             "MLUX-C0469"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "initialLoadFailure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "loadFailure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "removeFailure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "clearFailure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "clearFailure.messageKey",
-                               "occurrence": 2,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "cart-failure-title",
-                           "unitIds": [
-                             "MLUX-C0120",
-                             "MLUX-C0507",
-                             "MLUX-C0515",
-                             "MLUX-C0511",
-                             "MLUX-C0513",
-                             "MLUX-C0508",
-                             "MLUX-C0516",
-                             "MLUX-C0470"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "initialLoadFailure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "loadFailure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "removeFailure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "clearFailure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "cart-return-labels",
-                           "unitIds": [
-                             "MLUX-C0003",
-                             "MLUX-C0007",
-                             "MLUX-C0004",
-                             "MLUX-C0006",
-                             "MLUX-C0028",
-                             "MLUX-C0026",
-                             "MLUX-C0039",
-                             "MLUX-C0033",
-                             "MLUX-C0041",
-                             "MLUX-C0031",
-                             "MLUX-C0035",
-                             "MLUX-C0044",
-                             "MLUX-C0024",
-                             "MLUX-C0046"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "functionName": "CartPage",
-                               "argument": "returnTarget.labelKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "catalog-failure-message",
-                           "unitIds": [
-                             "MLUX-C0518",
-                             "MLUX-C0471",
-                             "MLUX-C0474"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                               "functionName": "CatalogPage",
-                               "argument": "discovery.failure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "catalog-failure-title",
-                           "unitIds": [
-                             "MLUX-C0517",
-                             "MLUX-C0519",
-                             "MLUX-C0470"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                               "functionName": "CatalogPage",
-                               "argument": "discovery.failure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "catalog-refresh",
-                           "unitIds": [
-                             "MLUX-C0135",
-                             "MLUX-C0136"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                               "functionName": "CatalogPage",
-                               "argument": "`catalog:${refreshAnnouncement}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "course-action-feedback",
-                           "unitIds": [
-                             "MLUX-C0495",
-                             "MLUX-C0487",
-                             "MLUX-C0163",
-                             "MLUX-C0489",
-                             "MLUX-C0494",
-                             "MLUX-C0492",
-                             "MLUX-C0491",
-                             "MLUX-C0157",
-                             "MLUX-C0490",
-                             "MLUX-C0493",
-                             "MLUX-C0488"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/catalog-page/CourseCard.tsx",
-                               "functionName": "CourseCard",
-                               "argument": "`course:${action.feedback.messageKey}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
-                               "functionName": "actionNotice",
-                               "argument": "`course:${mutationState.disposition.messageKey}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
-                               "functionName": "actionNotice",
-                               "argument": "`course:${courseActionReconciliationUncertaintyMessageKey}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "course-action-labels",
-                           "unitIds": [
-                             "MLUX-C0442",
-                             "MLUX-C0480",
-                             "MLUX-C0143",
-                             "MLUX-C0443",
-                             "MLUX-C0479",
-                             "MLUX-C0482",
-                             "MLUX-C0444",
-                             "MLUX-C0478",
-                             "MLUX-C0481",
-                             "MLUX-C0163",
-                             "MLUX-C0502",
-                             "MLUX-C0503",
-                             "MLUX-C0501",
-                             "MLUX-C0157",
-                             "MLUX-C0499",
-                             "MLUX-C0496",
-                             "MLUX-C0498",
-                             "MLUX-C0497",
-                             "MLUX-C0500",
-                             "MLUX-C0059"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/catalog-page/CourseCard.tsx",
-                               "functionName": "CourseCard",
-                               "argument": "action.labelKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
-                               "functionName": "CourseActionPanel",
-                               "argument": "action.helper.guidanceKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
-                               "functionName": "CourseActionPanel",
-                               "argument": "action.helper.linkTextKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
-                               "functionName": "CourseActionPanel",
-                               "argument": "action.labelKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
-                               "functionName": "CourseActionPanel",
-                               "argument": "action.labelKey",
-                               "occurrence": 2,
-                               "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
-                               "functionName": "CourseActionPanel",
-                               "argument": "action.labelKey",
-                               "occurrence": 3,
-                               "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "course-detail-failure-message",
-                           "unitIds": [
-                             "MLUX-C0471",
-                             "MLUX-C0474",
-                             "MLUX-C0469",
-                             "MLUX-C0170"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseOutline.tsx",
-                               "functionName": "CourseOutline",
-                               "argument": "failure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:5662796bd8a545b0b8ac44d1d2c3fd9e3752b7f813d055ba8e778d15a1152108"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                               "functionName": "CourseDetailPage",
-                               "argument": "failure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "course-detail-failure-title",
-                           "unitIds": [
-                             "MLUX-C0470",
-                             "MLUX-C0472",
-                             "MLUX-C0473",
-                             "MLUX-C0169"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseOutline.tsx",
-                               "functionName": "CourseOutline",
-                               "argument": "failure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:5662796bd8a545b0b8ac44d1d2c3fd9e3752b7f813d055ba8e778d15a1152108"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                               "functionName": "CourseDetailPage",
-                               "argument": "failure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                               "functionName": "CourseDetailPage",
-                               "argument": "failure.titleKey",
-                               "occurrence": 2,
-                               "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "course-recovery",
-                           "unitIds": [
-                             "MLUX-C0172",
-                             "MLUX-C0173"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                               "functionName": "CourseDetailPage",
-                               "argument": "`course:${recoveryMessage}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "instructor-editor-messages",
-                           "unitIds": [
-                             "MLUX-C0192",
-                             "MLUX-C0186",
-                             "MLUX-C0195",
-                             "MLUX-C0209",
-                             "MLUX-C0210",
-                             "MLUX-C0215",
-                             "MLUX-C0193",
-                             "MLUX-C0190",
-                             "MLUX-C0191",
-                             "MLUX-C0201",
-                             "MLUX-C0202",
-                             "MLUX-C0189",
-                             "MLUX-C0194",
-                             "MLUX-C0217",
-                             "MLUX-C0182",
-                             "MLUX-C0183",
-                             "MLUX-C0185",
-                             "MLUX-C0216",
-                             "MLUX-C0363",
-                             "MLUX-C0184",
-                             "MLUX-C0251",
-                             "MLUX-C0250",
-                             "MLUX-C0245",
-                             "MLUX-C0257",
-                             "MLUX-C0249",
-                             "MLUX-C0241",
-                             "MLUX-C0240",
-                             "MLUX-C0243",
-                             "MLUX-C0244",
-                             "MLUX-C0242"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "features/instructor-course-editor/validation.ts",
-                               "functionName": "resolveInstructorEditorFailureMessage",
-                               "argument": "`instructor:${message.key}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
-                             },
-                             {
-                               "sourcePath": "features/instructor-course-editor/validation.ts",
-                               "functionName": "resolveInstructorEditorFailureMessage",
-                               "argument": "`instructor:${message.labelKey}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
-                             },
-                             {
-                               "sourcePath": "features/instructor-course-editor/validation.ts",
-                               "functionName": "resolveInstructorEditorFailureMessage",
-                               "argument": "`instructor:${message.labelKey}`",
-                               "occurrence": 2,
-                               "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
-                             },
-                             {
-                               "sourcePath": "features/instructor-course-editor/validation.ts",
-                               "functionName": "resolveInstructorEditorFailureMessage",
-                               "argument": "`instructor:${message.actionKey}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
-                             },
-                             {
-                               "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                               "functionName": "interpolateInstructorTemplate",
-                               "argument": "key",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "instructor-title-validation",
-                           "unitIds": [
-                             "MLUX-C0190",
-                             "MLUX-C0230"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
-                               "functionName": "InstructorCoursesPage",
-                               "argument": "`instructor:${titleError}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:9f6ce1e72b63ea3140e14f5c6878ad21543093bc6526c8cbd171342e92b14e57"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "learning-failure-message",
-                           "unitIds": [
-                             "MLUX-C0469",
-                             "MLUX-C0475",
-                             "MLUX-C0266",
-                             "MLUX-C0477"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/learning-list-page/LearningListPage.tsx",
-                               "functionName": "LearningListPage",
-                               "argument": "failure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:8ebde6f65eb583569e1d0db37651996aa6ba1d80fcf305bde618c820b27a9b1a"
-                             },
-                             {
-                               "sourcePath": "pages/learning-detail-page/LearningDetailPage.tsx",
-                               "functionName": "LearningDetailPage",
-                               "argument": "failure.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:60a247589d0c16ab2ade819a42fcdbca524947323ae65f099fb53ca8df9c3954"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "learning-failure-title",
-                           "unitIds": [
-                             "MLUX-C0114",
-                             "MLUX-C0476",
-                             "MLUX-C0265"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/learning-list-page/LearningListPage.tsx",
-                               "functionName": "LearningListPage",
-                               "argument": "failure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:8ebde6f65eb583569e1d0db37651996aa6ba1d80fcf305bde618c820b27a9b1a"
-                             },
-                             {
-                               "sourcePath": "pages/learning-detail-page/LearningDetailPage.tsx",
-                               "functionName": "LearningDetailPage",
-                               "argument": "failure.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:60a247589d0c16ab2ade819a42fcdbca524947323ae65f099fb53ca8df9c3954"
-                             },
-                             {
-                               "sourcePath": "pages/learning-detail-page/LearningDetailPage.tsx",
-                               "functionName": "LearningDetailPage",
-                               "argument": "failure.titleKey",
-                               "occurrence": 2,
-                               "sourceFingerprint": "sha256:60a247589d0c16ab2ade819a42fcdbca524947323ae65f099fb53ca8df9c3954"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "learning-progress-feedback",
-                           "unitIds": [
-                             "MLUX-C0521",
-                             "MLUX-C0520"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/learning-detail-page/LearningDetailPage.tsx",
-                               "functionName": "LearningDetailPage",
-                               "argument": "workspace.feedback.messageKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:60a247589d0c16ab2ade819a42fcdbca524947323ae65f099fb53ca8df9c3954"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "lesson-completion",
-                           "unitIds": [
-                             "MLUX-C0483",
-                             "MLUX-C0484"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
-                               "functionName": "EnrollmentProgressPanel",
-                               "argument": "`learning:${lessonCompletionLabelKey(displayState)}`",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "lesson-type-labels",
-                           "unitIds": [
-                             "MLUX-C0205",
-                             "MLUX-C0204",
-                             "MLUX-C0203"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseOutline.tsx",
-                               "functionName": "CourseOutline",
-                               "argument": "LESSON_TYPE_LABEL_KEY[lesson.lessonType]",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:5662796bd8a545b0b8ac44d1d2c3fd9e3752b7f813d055ba8e778d15a1152108"
-                             },
-                             {
-                               "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                               "functionName": "InstructorCourseEditorPage",
-                               "argument": "LESSON_TYPE_LABEL_KEY[lesson.lessonType]",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "navigation-labels",
-                           "unitIds": [
-                             "MLUX-C0003",
-                             "MLUX-C0007",
-                             "MLUX-C0004",
-                             "MLUX-C0006",
-                             "MLUX-C0005"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "app/layouts/NavigationLinks.tsx",
-                               "functionName": "NavigationLinks",
-                               "argument": "item.labelKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "route-titles",
-                           "unitIds": [
-                             "MLUX-C0010",
-                             "MLUX-C0007",
-                             "MLUX-C0004",
-                             "MLUX-C0006",
-                             "MLUX-C0028",
-                             "MLUX-C0026",
-                             "MLUX-C0037",
-                             "MLUX-C0039",
-                             "MLUX-C0033",
-                             "MLUX-C0041",
-                             "MLUX-C0031",
-                             "MLUX-C0035",
-                             "MLUX-C0044",
-                             "MLUX-C0024",
-                             "MLUX-C0046"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "app/router/RouteErrorBoundary.tsx",
-                               "functionName": "ApplicationTitleBoundary",
-                               "argument": "route.titleKey",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
-                             }
-                           ]
-                         },
-                         {
-                           "id": "sort-labels",
-                           "unitIds": [
-                             "MLUX-C0150",
-                             "MLUX-C0148",
-                             "MLUX-C0147",
-                             "MLUX-C0154",
-                             "MLUX-C0153",
-                             "MLUX-C0151"
-                           ],
-                           "consumers": [
-                             {
-                               "sourcePath": "pages/catalog-page/SortControl.tsx",
-                               "functionName": "labelFor",
-                               "argument": "label.key",
-                               "occurrence": 1,
-                               "sourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344"
-                             }
-                           ]
-                         }
-                       ],
-                       "translatorDependencies": [
-                         {
-                           "sourcePath": "pages/signup-page/RolePicker.tsx",
-                           "functionName": "RolePicker",
-                           "bindingName": "t",
-                           "hookName": "useMemo",
-                           "sourceFingerprint": "sha256:02bff34271831eefaabac86fc6a4fa1baf42608057205e198c6e11a69454ef5c"
-                         }
-                       ],
-                       "reconciliations": [
-                         {
-                           "request": {
-                             "taskId": "CRF-002",
-                             "sources": [
-                               {
-                                 "sourcePath": "pages/cart-page/CartPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:8ea0b407f242c4fbf8cb88a2c5fa979457d4c8f9ec90f98974d00e078683af4d"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:4be81b963669a36476cb3cb717b042ab74aa126cc7db0328898cb03d796ba62e",
-                           "sources": [
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "sourceFingerprint": "sha256:1be1c92c6eb003d27749c6c3d8f03f342cf9400d8c880bbd62440ed8ab4c7464",
-                               "entryCount": 12
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "CRF-002",
-                             "sources": [
-                               {
-                                 "sourcePath": "pages/cart-page/CartPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:1be1c92c6eb003d27749c6c3d8f03f342cf9400d8c880bbd62440ed8ab4c7464"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:4ca4d53d8df917f39ba2b489395dc7a9b810e2eacf6386365dbfd50af87b6d4d",
-                           "sources": [
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "sourceFingerprint": "sha256:71d863870e302b87534e364af9d2190414b5c458027f2f20e7dc07d97ec37d8c",
-                               "entryCount": 12
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "CRF-002",
-                             "sources": [
-                               {
-                                 "sourcePath": "pages/cart-page/CartPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:71d863870e302b87534e364af9d2190414b5c458027f2f20e7dc07d97ec37d8c"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:77dfb2fab5ea6c3d306c368fc1757eeff77b35d1e503b58344b7679dd16e19d6",
-                           "sources": [
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "sourceFingerprint": "sha256:ca13f06613d8768ec89197600aac518cf6a72ae9ab423b5a0e381d6a865a19e8",
-                               "entryCount": 12
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-068",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/layouts/AccountMenu.tsx",
-                                 "expectedSourceFingerprint": "sha256:45f427f4a53dd4209b93013acd8ae2970074bf1ffaf06aafe345b20aa0774586"
-                               },
-                               {
-                                 "sourcePath": "app/layouts/AppShell.tsx",
-                                 "expectedSourceFingerprint": "sha256:197b55f9750b7f9c498ab5dbad8ac773d81d309638ac80631644263acfd12d88"
-                               },
-                               {
-                                 "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:ca9280e6a42e6c5b29b9eb35900cefe62d8997dfcb8d15174d800421d31e6b90"
-                               },
-                               {
-                                 "sourcePath": "pages/catalog-page/SortControl.tsx",
-                                 "expectedSourceFingerprint": "sha256:d2e004fcb1858009b54f44c5e07a3a4e5ad323aef8bdded34f29c0b624fc92f2"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:c3aa4f9756835c511c858ec62bfaf4a232b28365b4c16fac070a5825d4dd2112",
-                           "sources": [
-                             {
-                               "sourcePath": "app/layouts/AccountMenu.tsx",
-                               "sourceFingerprint": "sha256:e7a7f6e6032be88f2dcfc227df61bb9dc10a6bb3aaf62b416b2d58c59923e9b5",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "app/layouts/AppShell.tsx",
-                               "sourceFingerprint": "sha256:69e3314ec442fedad7c682bc04471db93cc461e167d42a67c1cba8664797003a",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                               "sourceFingerprint": "sha256:8f899e32cd19dbeb878bb266f392c1568fab61c23a246109cc6d5e834b077bf6",
-                               "entryCount": 3
-                             },
-                             {
-                               "sourcePath": "pages/catalog-page/SortControl.tsx",
-                               "sourceFingerprint": "sha256:ac00f0ab138e2b92571b24d08d1b35d8311b187946bd7a73598789941ddfca89",
-                               "entryCount": 1
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-068",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/layouts/AccountMenu.tsx",
-                                 "expectedSourceFingerprint": "sha256:e7a7f6e6032be88f2dcfc227df61bb9dc10a6bb3aaf62b416b2d58c59923e9b5"
-                               },
-                               {
-                                 "sourcePath": "app/layouts/AppShell.tsx",
-                                 "expectedSourceFingerprint": "sha256:9bdc8688b0b144d433b4621f39011210a6826463cc49273a8843a2ca4d5c00c8"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:bbb28d2dbfcd234952753fb9eee89256d979d83d3bdc2054dd8c874fdddf7463",
-                           "sources": [
-                             {
-                               "sourcePath": "app/layouts/AccountMenu.tsx",
-                               "sourceFingerprint": "sha256:b774c4c7e4cdb11a34b95872d3066038e3b23007ac8e027fc49b5ac19efc8b08",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "app/layouts/AppShell.tsx",
-                               "sourceFingerprint": "sha256:98fdd061364d6e3c237a38c3def49b115ce94441e5da906a4f55be28227104a9",
-                               "entryCount": 1
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-068",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/layouts/AccountMenu.tsx",
-                                 "expectedSourceFingerprint": "sha256:b774c4c7e4cdb11a34b95872d3066038e3b23007ac8e027fc49b5ac19efc8b08"
-                               },
-                               {
-                                 "sourcePath": "app/layouts/AppShell.tsx",
-                                 "expectedSourceFingerprint": "sha256:98fdd061364d6e3c237a38c3def49b115ce94441e5da906a4f55be28227104a9"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:9317ee6083c6e616a493086819a1aa53b44a04e3136124bbb3ecc8a28e66f28a",
-                           "sources": [
-                             {
-                               "sourcePath": "app/layouts/AccountMenu.tsx",
-                               "sourceFingerprint": "sha256:56ff96e58664d0835be22a544e6b81eee33ba78e398ffc46964b6a2e985f9c5a",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "app/layouts/AppShell.tsx",
-                               "sourceFingerprint": "sha256:05d9e6c0622576e0bd1e50827bbeacdd6113bc776e547b49282e37ce54ac442e",
-                               "entryCount": 1
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-068",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/layouts/AppShell.tsx",
-                                 "expectedSourceFingerprint": "sha256:3f9507cd7ccc0ca99c9f0ffc1aae508839335f83485031f72b3caf5d0681e0c7"
-                               },
-                               {
-                                 "sourcePath": "pages/cart-page/CartPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:938ca5323ed433de91af3d361a627c5a1559bf3129f2fa04b0578272263ec3c8"
-                               },
-                               {
-                                 "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:5f4cd50b1b983dfaf387914588b076d4c009cccc22396b8def74a52246f27702"
-                               },
-                               {
-                                 "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:5fb2661b09cf4f1f8d86941745f619acffd7c7e1ed2c30a387a72faaedfe1bad"
-                               },
-                               {
-                                 "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:624be4f88051166b3127a863d1256476f5989372358ccdcfce3758913ffdcbfb"
-                               },
-                               {
-                                 "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:749923dbddbf6fba6f412d0c3ba296295ad3fdab067b9ca62c8f4019206c20b6"
-                               },
-                               {
-                                 "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                                 "expectedSourceFingerprint": "sha256:458dcb14a0d15b2f30f0fa571ecd2b6300d918cd31b89af5c53de31dc03c9229"
-                               },
-                               {
-                                 "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
-                                 "expectedSourceFingerprint": "sha256:2f5f55fa41d313d15e4cc931a8db19ced0572705a117bc7cb332113eba216aff"
-                               }
-                             ],
-                             "obsolete": [
-                               {
-                                 "kind": "translatorWrapper",
-                                 "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
-                                 "functionName": "lessonTypeLabel",
-                                 "bindingName": "t"
-                               },
-                               {
-                                 "kind": "dynamicConsumer",
-                                 "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
-                                 "functionName": "lessonTypeLabel",
-                                 "bindingName": "LESSON_TYPE_LABEL_KEYS[lessonType]",
-                                 "familyId": "lesson-type-labels"
-                               }
-                             ]
-                           },
-                           "requestDigest": "sha256:e6d81e28bf901bf420865fff96dadb5a52e5d8442885c51f273d54aa8e93c71a",
-                           "sources": [
-                             {
-                               "sourcePath": "app/layouts/AppShell.tsx",
-                               "sourceFingerprint": "sha256:f50633a6f1cf45454af074c6bba5e239f734f0d546f2a6866426ad0b43ff56fd",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "sourceFingerprint": "sha256:6a53a57125deeb48324396471d830446dbd844994770488ecaadf6350d70fc03",
-                               "entryCount": 12
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                               "sourceFingerprint": "sha256:c748312ff8bbc6941f134c82018f676141f08e687fb8a605e0f1848360735014",
-                               "entryCount": 4
-                             },
-                             {
-                               "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                               "sourceFingerprint": "sha256:b93fa7d611c38013a6d0deb7f558410b1473eae2fc89e06feb1dc407937602d2",
-                               "entryCount": 3
-                             },
-                             {
-                               "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
-                               "sourceFingerprint": "sha256:c9f76c4b3680bd3cf7f1a8c982140db158591ba5d75ac5b3481383ced7b81915",
-                               "entryCount": 2
-                             },
-                             {
-                               "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
-                               "sourceFingerprint": "sha256:ae9b117bb37674e8526de306dcc004fe9092a2e11f5bc693329b7c8eab5f2478",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                               "sourceFingerprint": "sha256:6283863330fced0e58d44f9ff6fd593ffec8f99952168632de5380f66030da66",
-                               "entryCount": 3
-                             },
-                             {
-                               "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
-                               "sourceFingerprint": "sha256:f9f1cd9e86569575973af8f2e91b53c938dea561ecfdeb24a285ae59378e48a3",
-                               "entryCount": 1
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-068",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/layouts/AccountMenu.tsx",
-                                 "expectedSourceFingerprint": "sha256:56ff96e58664d0835be22a544e6b81eee33ba78e398ffc46964b6a2e985f9c5a"
-                               },
-                               {
-                                 "sourcePath": "app/layouts/AppShell.tsx",
-                                 "expectedSourceFingerprint": "sha256:f50633a6f1cf45454af074c6bba5e239f734f0d546f2a6866426ad0b43ff56fd"
-                               },
-                               {
-                                 "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:065072d8c1225905c8ea7fbf2cbfa7b36ef28f885019ca00256992d1424c661b"
-                               },
-                               {
-                                 "sourcePath": "pages/catalog-page/CourseCard.tsx",
-                                 "expectedSourceFingerprint": "sha256:e4270db22cc7b69461ff2a6f0e713ef876cf8bc7c737f1479ff8c03935ce78ed"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:03c962c074355e49b8426ae56b8140251ba8eba6ef5b70db27c06dde7bec2e17",
-                           "sources": [
-                             {
-                               "sourcePath": "app/layouts/AccountMenu.tsx",
-                               "sourceFingerprint": "sha256:48cd610c01ee54b7416b9151fc8816a6fe4403ec4da6258a95272095af3c8de8",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "app/layouts/AppShell.tsx",
-                               "sourceFingerprint": "sha256:08d3aa3c184e9e9c800e33f5840f8549a714a8963fbd24b004a6ac0568376d9b",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                               "sourceFingerprint": "sha256:701686a01f9c0d81d10df1d87ad7b07024c42f2872e1b551d962d6f833e30a69",
-                               "entryCount": 3
-                             },
-                             {
-                               "sourcePath": "pages/catalog-page/CourseCard.tsx",
-                               "sourceFingerprint": "sha256:d8e208529d2a1d5fb1c7cbb851690deb17ef3f06970358b04793d78de7731330",
-                               "entryCount": 2
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-068",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/layouts/AccountMenu.tsx",
-                                 "expectedSourceFingerprint": "sha256:48cd610c01ee54b7416b9151fc8816a6fe4403ec4da6258a95272095af3c8de8"
-                               },
-                               {
-                                 "sourcePath": "app/layouts/AppShell.tsx",
-                                 "expectedSourceFingerprint": "sha256:9581010a8f8934d5c972f7b068089f686ed307dc7c481b86ddce691d8fa64e7f"
-                               },
-                               {
-                                 "sourcePath": "pages/cart-page/CartPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:44109b84d491b41ab01df076cd2c233201b6458bbfd6458baffc8932d33e2f24"
-                               },
-                               {
-                                 "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:b93fa7d611c38013a6d0deb7f558410b1473eae2fc89e06feb1dc407937602d2"
-                               },
-                               {
-                                 "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:96b06476fd00a40586e8dcc28beb9b0ec4c777682527dd5a81b2c169f082c1f6"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:cdc71fcec915f01df8830b63feadb20d23ffac682bf38162c3ae83bfa5070d22",
-                           "sources": [
-                             {
-                               "sourcePath": "app/layouts/AccountMenu.tsx",
-                               "sourceFingerprint": "sha256:c5a17333cf192b5f53048b85f381c0036e5c46240b3570945da2a444cb42f0bb",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "app/layouts/AppShell.tsx",
-                               "sourceFingerprint": "sha256:3befb734af8e0c9269c416b9d621b71a439f6fa4d31ef7d16166c6ae526c1a6d",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "sourceFingerprint": "sha256:5ad58ef5e4de7e4865c895bc076fff01751475dc60fd33d4b84b659f6376778f",
-                               "entryCount": 12
-                             },
-                             {
-                               "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                               "sourceFingerprint": "sha256:5b5f64fe8a41e4342236e4b9cf141ce177c0acc7b02bdc8eed56e8171f2eccac",
-                               "entryCount": 3
-                             },
-                             {
-                               "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
-                               "sourceFingerprint": "sha256:9f6ce1e72b63ea3140e14f5c6878ad21543093bc6526c8cbd171342e92b14e57",
-                               "entryCount": 2
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-029",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/layouts/AppShell.tsx",
-                                 "expectedSourceFingerprint": "sha256:fdec331974c617a15801a6220daf3411f3d24f974f6e7ceff91f65cc4f424638"
-                               },
-                               {
-                                 "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:05d585ec7a4605a0b91d404c18e13990079f1e7479a3598028d82ee494e13943"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:a848c3e8cbdc15d62c2629c619cd4d636e3a399b1a957cb9591839bf362ad627",
-                           "sources": [
-                             {
-                               "sourcePath": "app/layouts/AppShell.tsx",
-                               "sourceFingerprint": "sha256:414628a77a85df9235df0bc5d91cfb849618c85549c399feb9b73e8224246ba6",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                               "sourceFingerprint": "sha256:5b397477c7463a284cdbcaa48f0c6995b3d942926b61e3e07cd38672bfd71cf7",
-                               "entryCount": 3
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "CRF-004",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/router/RouteErrorBoundary.tsx",
-                                 "expectedSourceFingerprint": "sha256:72550b6247b69f1fc2de594fd4c1f8c3d23e7daf7e729cc20f0f2801e087aedc"
-                               },
-                               {
-                                 "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:ae9b117bb37674e8526de306dcc004fe9092a2e11f5bc693329b7c8eab5f2478"
-                               },
-                               {
-                                 "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                                 "expectedSourceFingerprint": "sha256:6283863330fced0e58d44f9ff6fd593ffec8f99952168632de5380f66030da66"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:cf3853dd8df37dfede457054c270f1c0c074d44693ae8c395b1de99ad1f8906e",
-                           "sources": [
-                             {
-                               "sourcePath": "app/router/RouteErrorBoundary.tsx",
-                               "sourceFingerprint": "sha256:55ee6f53e3f2a18b186befc606cc7f1cce8a1109e5b0b5ee81eb7f6eb6f0ed18",
-                               "entryCount": 2
-                             },
-                             {
-                               "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
-                               "sourceFingerprint": "sha256:c938607eb1be97d14eab0b72279836f75a885fd3d3979e18b906d65ad8ca9e6a",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                               "sourceFingerprint": "sha256:1d6b2462c49fb483e02b8242ef6a0657a058ab326f3a1040ee7f84fe3cca28cd",
-                               "entryCount": 3
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "CRF-004",
-                             "sources": [
-                               {
-                                 "sourcePath": "pages/cart-page/CartPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:f06cf12a8fb3c1b7af591bb87f3e443bd602bf2e4c9fbc2d707ce5f5cd5e60b9"
-                               },
-                               {
-                                 "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:c748312ff8bbc6941f134c82018f676141f08e687fb8a605e0f1848360735014"
-                               },
-                               {
-                                 "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:5b5f64fe8a41e4342236e4b9cf141ce177c0acc7b02bdc8eed56e8171f2eccac"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:3509bec445cd90443857ea63c9e49f546c932a4fcd75355e8dc1bd2a3c475636",
-                           "sources": [
-                             {
-                               "sourcePath": "pages/cart-page/CartPage.tsx",
-                               "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976",
-                               "entryCount": 12
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                               "sourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d",
-                               "entryCount": 4
-                             },
-                             {
-                               "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
-                               "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde",
-                               "entryCount": 3
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-068",
-                             "sources": [
-                               {
-                                 "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:d5565eeb302b625458f8d619bc187cb876ae3833da5d03e28e911d44d65e11f9"
-                               },
-                               {
-                                 "sourcePath": "pages/catalog-page/CourseCard.tsx",
-                                 "expectedSourceFingerprint": "sha256:d8e208529d2a1d5fb1c7cbb851690deb17ef3f06970358b04793d78de7731330"
-                               },
-                               {
-                                 "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d"
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:89bcb2c3eeae45c7a1caf2472c6dd59be40319f55b2d6747626d79d16f7db215",
-                           "sources": [
-                             {
-                               "sourcePath": "pages/catalog-page/CatalogPage.tsx",
-                               "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611",
-                               "entryCount": 3
-                             },
-                             {
-                               "sourcePath": "pages/catalog-page/CourseCard.tsx",
-                               "sourceFingerprint": "sha256:09912527459f5b4dcc03753aadce2ae7795e0bf1efea71a3c260fccc6dae4cf7",
-                               "entryCount": 2
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                               "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d",
-                               "entryCount": 4
-                             }
-                           ]
-                         },
-                         {
-                           "request": {
-                             "taskId": "FE-073",
-                             "sources": [
-                               {
-                                 "sourcePath": "app/layouts/AppShell.tsx",
-                                 "expectedSourceFingerprint": "sha256:d254036f97c45cd38c7775e7b799f899cc2a11c691f5310d1a840edce7a959e8"
-                               },
-                               {
-                                 "sourcePath": "app/layouts/NavigationLinks.tsx",
-                                 "expectedSourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb"
-                               },
-                               {
-                                 "sourcePath": "app/router/RouteErrorBoundary.tsx",
-                                 "expectedSourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
-                               },
-                               {
-                                 "sourcePath": "pages/catalog-page/CourseCard.tsx",
-                                 "expectedSourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
-                               },
-                               {
-                                 "sourcePath": "pages/catalog-page/SortControl.tsx",
-                                 "expectedSourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344"
-                               },
-                               {
-                                 "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                                 "expectedSourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
-                               },
-                               {
-                                 "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                                 "expectedSourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
-                               },
-                               {
-                                 "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
-                                 "expectedSourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf"
-                               }
-                             ],
-                             "replacements": [
-                               {
-                                 "familyId": "navigation-labels",
-                                 "oldConsumer": {
-                                   "sourcePath": "app/layouts/AppShell.tsx",
-                                   "functionName": "NavigationLinks",
-                                   "argument": "item.labelKey",
-                                   "occurrence": 1
-                                 },
-                                 "newConsumer": {
-                                   "sourcePath": "app/layouts/NavigationLinks.tsx",
-                                   "functionName": "NavigationLinks",
-                                   "argument": "item.labelKey",
-                                   "occurrence": 1
-                                 }
-                               }
-                             ],
-                             "obsolete": []
-                           },
-                           "requestDigest": "sha256:1d05ad6ce54adaf3a7dd550a6d2e4c331431c9e83fc2546fe43c2a5fd2ac00e4",
-                           "sources": [
-                             {
-                               "sourcePath": "app/layouts/AppShell.tsx",
-                               "sourceFingerprint": "sha256:d254036f97c45cd38c7775e7b799f899cc2a11c691f5310d1a840edce7a959e8",
-                               "entryCount": 0
-                             },
-                             {
-                               "sourcePath": "app/layouts/NavigationLinks.tsx",
-                               "sourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "app/router/RouteErrorBoundary.tsx",
-                               "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b",
-                               "entryCount": 2
-                             },
-                             {
-                               "sourcePath": "pages/catalog-page/CourseCard.tsx",
-                               "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301",
-                               "entryCount": 2
-                             },
-                             {
-                               "sourcePath": "pages/catalog-page/SortControl.tsx",
-                               "sourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344",
-                               "entryCount": 1
-                             },
-                             {
-                               "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
-                               "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199",
-                               "entryCount": 4
-                             },
-                             {
-                               "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
-                               "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa",
-                               "entryCount": 3
-                             },
-                             {
-                               "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
-                               "sourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf",
-                               "entryCount": 1
-                             }
-                           ]
-                         }
-                       ]
-                     }
+    "version": 1,
+    "translatorWrappers": [
+      {
+        "sourcePath": "app/router/RouteErrorBoundary.tsx",
+        "functionName": "resolveApplicationTitle",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
+      },
+      {
+        "sourcePath": "features/auth-workflows/validation.ts",
+        "functionName": "resolveAuthMessage",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:f56725b0f7c8420ef397beea5e10ba477ece7afcb36816d6d50d276d26fc23a1"
+      },
+      {
+        "sourcePath": "features/instructor-course-editor/validation.ts",
+        "functionName": "resolveInstructorEditorFailureMessage",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
+      },
+      {
+        "sourcePath": "pages/cart-page/CartPage.tsx",
+        "functionName": "CartRecoveryAction",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+      },
+      {
+        "sourcePath": "pages/cart-page/CartPage.tsx",
+        "functionName": "mutationStatusMessage",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+      },
+      {
+        "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
+        "functionName": "actionNotice",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
+      },
+      {
+        "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+        "functionName": "interpolateInstructorTemplate",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde"
+      },
+      {
+        "sourcePath": "pages/instructor-course-enrollments-page/InstructorCourseEnrollmentsPage.tsx",
+        "functionName": "enrollmentStatusLabel",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:6cffc42ea9f3835bf55b873cd6135b885476aa79312e251a440b51f2ec85695b"
+      },
+      {
+        "sourcePath": "pages/instructor-course-enrollments-page/InstructorCourseEnrollmentsPage.tsx",
+        "functionName": "failure",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:6cffc42ea9f3835bf55b873cd6135b885476aa79312e251a440b51f2ec85695b"
+      },
+      {
+        "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
+        "functionName": "collectionFailure",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:9f6ce1e72b63ea3140e14f5c6878ad21543093bc6526c8cbd171342e92b14e57"
+      },
+      {
+        "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
+        "functionName": "uploadRule",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:c938607eb1be97d14eab0b72279836f75a885fd3d3979e18b906d65ad8ca9e6a"
+      },
+      {
+        "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+        "functionName": "AssistantResponseError",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
+      },
+      {
+        "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+        "functionName": "AssistantTypingIndicator",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
+      },
+      {
+        "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+        "functionName": "errorCopy",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
+      }
+    ],
+    "translatorForwarders": [
+      {
+        "sourcePath": "features/auth-workflows/validation.ts",
+        "functionName": "resolveAuthFieldErrors",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:f56725b0f7c8420ef397beea5e10ba477ece7afcb36816d6d50d276d26fc23a1"
+      },
+      {
+        "sourcePath": "features/instructor-course-editor/validation.ts",
+        "functionName": "resolveInstructorEditorFormFailure",
+        "bindingName": "t",
+        "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
+      }
+    ],
+    "dynamicKeyFamilies": [
+      {
+        "id": "account-role-labels",
+        "unitIds": ["MLUX-C0286", "MLUX-C0285", "MLUX-C0164"],
+        "consumers": [
+          {
+            "sourcePath": "app/layouts/AccountMenu.tsx",
+            "functionName": "AccountMenu",
+            "argument": "rolePresentation.labelKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:c5a17333cf192b5f53048b85f381c0036e5c46240b3570945da2a444cb42f0bb"
+          }
+        ]
+      },
+      {
+        "id": "auth-field-labels",
+        "unitIds": [
+          "MLUX-C0292",
+          "MLUX-C0180",
+          "MLUX-C0290",
+          "MLUX-C0291",
+          "MLUX-C0279",
+          "MLUX-C0277",
+          "MLUX-C0287"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "features/auth-workflows/validation.ts",
+            "functionName": "resolveAuthMessage",
+            "argument": "`auth:${message.fieldLabel}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:f56725b0f7c8420ef397beea5e10ba477ece7afcb36816d6d50d276d26fc23a1"
+          }
+        ]
+      },
+      {
+        "id": "cart-failure-message",
+        "unitIds": [
+          "MLUX-C0514",
+          "MLUX-C0510",
+          "MLUX-C0509",
+          "MLUX-C0512",
+          "MLUX-C0471",
+          "MLUX-C0474",
+          "MLUX-C0469"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "initialLoadFailure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "loadFailure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "removeFailure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "clearFailure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "clearFailure.messageKey",
+            "occurrence": 2,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          }
+        ]
+      },
+      {
+        "id": "cart-failure-title",
+        "unitIds": [
+          "MLUX-C0120",
+          "MLUX-C0507",
+          "MLUX-C0515",
+          "MLUX-C0511",
+          "MLUX-C0513",
+          "MLUX-C0508",
+          "MLUX-C0516",
+          "MLUX-C0470"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "initialLoadFailure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "loadFailure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "removeFailure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "clearFailure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          }
+        ]
+      },
+      {
+        "id": "cart-return-labels",
+        "unitIds": [
+          "MLUX-C0003",
+          "MLUX-C0007",
+          "MLUX-C0004",
+          "MLUX-C0006",
+          "MLUX-C0028",
+          "MLUX-C0026",
+          "MLUX-C0039",
+          "MLUX-C0033",
+          "MLUX-C0041",
+          "MLUX-C0031",
+          "MLUX-C0035",
+          "MLUX-C0044",
+          "MLUX-C0024",
+          "MLUX-C0046"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "functionName": "CartPage",
+            "argument": "returnTarget.labelKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976"
+          }
+        ]
+      },
+      {
+        "id": "catalog-failure-message",
+        "unitIds": ["MLUX-C0518", "MLUX-C0471", "MLUX-C0474"],
+        "consumers": [
+          {
+            "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+            "functionName": "CatalogPage",
+            "argument": "discovery.failure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
+          }
+        ]
+      },
+      {
+        "id": "catalog-failure-title",
+        "unitIds": ["MLUX-C0517", "MLUX-C0519", "MLUX-C0470"],
+        "consumers": [
+          {
+            "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+            "functionName": "CatalogPage",
+            "argument": "discovery.failure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
+          }
+        ]
+      },
+      {
+        "id": "catalog-refresh",
+        "unitIds": ["MLUX-C0135", "MLUX-C0136"],
+        "consumers": [
+          {
+            "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+            "functionName": "CatalogPage",
+            "argument": "`catalog:${refreshAnnouncement}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611"
+          }
+        ]
+      },
+      {
+        "id": "course-action-feedback",
+        "unitIds": [
+          "MLUX-C0495",
+          "MLUX-C0487",
+          "MLUX-C0163",
+          "MLUX-C0489",
+          "MLUX-C0494",
+          "MLUX-C0492",
+          "MLUX-C0491",
+          "MLUX-C0157",
+          "MLUX-C0490",
+          "MLUX-C0493",
+          "MLUX-C0488"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "pages/catalog-page/CourseCard.tsx",
+            "functionName": "CourseCard",
+            "argument": "`course:${action.feedback.messageKey}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
+            "functionName": "actionNotice",
+            "argument": "`course:${mutationState.disposition.messageKey}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
+            "functionName": "actionNotice",
+            "argument": "`course:${courseActionReconciliationUncertaintyMessageKey}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
+          }
+        ]
+      },
+      {
+        "id": "course-action-labels",
+        "unitIds": [
+          "MLUX-C0442",
+          "MLUX-C0480",
+          "MLUX-C0143",
+          "MLUX-C0443",
+          "MLUX-C0479",
+          "MLUX-C0482",
+          "MLUX-C0444",
+          "MLUX-C0478",
+          "MLUX-C0481",
+          "MLUX-C0163",
+          "MLUX-C0502",
+          "MLUX-C0503",
+          "MLUX-C0501",
+          "MLUX-C0157",
+          "MLUX-C0499",
+          "MLUX-C0496",
+          "MLUX-C0498",
+          "MLUX-C0497",
+          "MLUX-C0500",
+          "MLUX-C0059"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "pages/catalog-page/CourseCard.tsx",
+            "functionName": "CourseCard",
+            "argument": "action.labelKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
+            "functionName": "CourseActionPanel",
+            "argument": "action.helper.guidanceKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
+            "functionName": "CourseActionPanel",
+            "argument": "action.helper.linkTextKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
+            "functionName": "CourseActionPanel",
+            "argument": "action.labelKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
+            "functionName": "CourseActionPanel",
+            "argument": "action.labelKey",
+            "occurrence": 2,
+            "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
+            "functionName": "CourseActionPanel",
+            "argument": "action.labelKey",
+            "occurrence": 3,
+            "sourceFingerprint": "sha256:66fd54fe713edcb98ecdb09292a31faed7a6c9d0828fc40bfdde37eaf6da0838"
+          }
+        ]
+      },
+      {
+        "id": "course-detail-failure-message",
+        "unitIds": ["MLUX-C0471", "MLUX-C0474", "MLUX-C0469", "MLUX-C0170"],
+        "consumers": [
+          {
+            "sourcePath": "pages/course-detail-page/CourseOutline.tsx",
+            "functionName": "CourseOutline",
+            "argument": "failure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:5662796bd8a545b0b8ac44d1d2c3fd9e3752b7f813d055ba8e778d15a1152108"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "functionName": "CourseDetailPage",
+            "argument": "failure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
+          }
+        ]
+      },
+      {
+        "id": "course-detail-failure-title",
+        "unitIds": ["MLUX-C0470", "MLUX-C0472", "MLUX-C0473", "MLUX-C0169"],
+        "consumers": [
+          {
+            "sourcePath": "pages/course-detail-page/CourseOutline.tsx",
+            "functionName": "CourseOutline",
+            "argument": "failure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:5662796bd8a545b0b8ac44d1d2c3fd9e3752b7f813d055ba8e778d15a1152108"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "functionName": "CourseDetailPage",
+            "argument": "failure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "functionName": "CourseDetailPage",
+            "argument": "failure.titleKey",
+            "occurrence": 2,
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
+          }
+        ]
+      },
+      {
+        "id": "course-recovery",
+        "unitIds": ["MLUX-C0172", "MLUX-C0173"],
+        "consumers": [
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "functionName": "CourseDetailPage",
+            "argument": "`course:${recoveryMessage}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
+          }
+        ]
+      },
+      {
+        "id": "instructor-editor-messages",
+        "unitIds": [
+          "MLUX-C0192",
+          "MLUX-C0186",
+          "MLUX-C0195",
+          "MLUX-C0209",
+          "MLUX-C0210",
+          "MLUX-C0215",
+          "MLUX-C0193",
+          "MLUX-C0190",
+          "MLUX-C0191",
+          "MLUX-C0201",
+          "MLUX-C0202",
+          "MLUX-C0189",
+          "MLUX-C0194",
+          "MLUX-C0217",
+          "MLUX-C0182",
+          "MLUX-C0183",
+          "MLUX-C0185",
+          "MLUX-C0216",
+          "MLUX-C0363",
+          "MLUX-C0184",
+          "MLUX-C0251",
+          "MLUX-C0250",
+          "MLUX-C0245",
+          "MLUX-C0257",
+          "MLUX-C0249",
+          "MLUX-C0241",
+          "MLUX-C0240",
+          "MLUX-C0243",
+          "MLUX-C0244",
+          "MLUX-C0242"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "features/instructor-course-editor/validation.ts",
+            "functionName": "resolveInstructorEditorFailureMessage",
+            "argument": "`instructor:${message.key}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
+          },
+          {
+            "sourcePath": "features/instructor-course-editor/validation.ts",
+            "functionName": "resolveInstructorEditorFailureMessage",
+            "argument": "`instructor:${message.labelKey}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
+          },
+          {
+            "sourcePath": "features/instructor-course-editor/validation.ts",
+            "functionName": "resolveInstructorEditorFailureMessage",
+            "argument": "`instructor:${message.labelKey}`",
+            "occurrence": 2,
+            "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
+          },
+          {
+            "sourcePath": "features/instructor-course-editor/validation.ts",
+            "functionName": "resolveInstructorEditorFailureMessage",
+            "argument": "`instructor:${message.actionKey}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:a6e5ff8844ea45c70535fb9cf86b850778cf206196cc250a8fd061dd437eab62"
+          },
+          {
+            "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+            "functionName": "interpolateInstructorTemplate",
+            "argument": "key",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde"
+          }
+        ]
+      },
+      {
+        "id": "instructor-title-validation",
+        "unitIds": ["MLUX-C0190", "MLUX-C0230"],
+        "consumers": [
+          {
+            "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
+            "functionName": "InstructorCoursesPage",
+            "argument": "`instructor:${titleError}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:9f6ce1e72b63ea3140e14f5c6878ad21543093bc6526c8cbd171342e92b14e57"
+          }
+        ]
+      },
+      {
+        "id": "learning-failure-message",
+        "unitIds": ["MLUX-C0469", "MLUX-C0475", "MLUX-C0266", "MLUX-C0477"],
+        "consumers": [
+          {
+            "sourcePath": "pages/learning-list-page/LearningListPage.tsx",
+            "functionName": "LearningListPage",
+            "argument": "failure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:8ebde6f65eb583569e1d0db37651996aa6ba1d80fcf305bde618c820b27a9b1a"
+          },
+          {
+            "sourcePath": "pages/learning-detail-page/LearningDetailPage.tsx",
+            "functionName": "LearningDetailPage",
+            "argument": "failure.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:60a247589d0c16ab2ade819a42fcdbca524947323ae65f099fb53ca8df9c3954"
+          }
+        ]
+      },
+      {
+        "id": "learning-failure-title",
+        "unitIds": ["MLUX-C0114", "MLUX-C0476", "MLUX-C0265"],
+        "consumers": [
+          {
+            "sourcePath": "pages/learning-list-page/LearningListPage.tsx",
+            "functionName": "LearningListPage",
+            "argument": "failure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:8ebde6f65eb583569e1d0db37651996aa6ba1d80fcf305bde618c820b27a9b1a"
+          },
+          {
+            "sourcePath": "pages/learning-detail-page/LearningDetailPage.tsx",
+            "functionName": "LearningDetailPage",
+            "argument": "failure.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:60a247589d0c16ab2ade819a42fcdbca524947323ae65f099fb53ca8df9c3954"
+          },
+          {
+            "sourcePath": "pages/learning-detail-page/LearningDetailPage.tsx",
+            "functionName": "LearningDetailPage",
+            "argument": "failure.titleKey",
+            "occurrence": 2,
+            "sourceFingerprint": "sha256:60a247589d0c16ab2ade819a42fcdbca524947323ae65f099fb53ca8df9c3954"
+          }
+        ]
+      },
+      {
+        "id": "learning-progress-feedback",
+        "unitIds": ["MLUX-C0521", "MLUX-C0520"],
+        "consumers": [
+          {
+            "sourcePath": "pages/learning-detail-page/LearningDetailPage.tsx",
+            "functionName": "LearningDetailPage",
+            "argument": "workspace.feedback.messageKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:60a247589d0c16ab2ade819a42fcdbca524947323ae65f099fb53ca8df9c3954"
+          }
+        ]
+      },
+      {
+        "id": "lesson-completion",
+        "unitIds": ["MLUX-C0483", "MLUX-C0484"],
+        "consumers": [
+          {
+            "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+            "functionName": "EnrollmentProgressPanel",
+            "argument": "`learning:${lessonCompletionLabelKey(displayState)}`",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf"
+          }
+        ]
+      },
+      {
+        "id": "lesson-type-labels",
+        "unitIds": ["MLUX-C0205", "MLUX-C0204", "MLUX-C0203"],
+        "consumers": [
+          {
+            "sourcePath": "pages/course-detail-page/CourseOutline.tsx",
+            "functionName": "CourseOutline",
+            "argument": "LESSON_TYPE_LABEL_KEY[lesson.lessonType]",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:5662796bd8a545b0b8ac44d1d2c3fd9e3752b7f813d055ba8e778d15a1152108"
+          },
+          {
+            "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+            "functionName": "InstructorCourseEditorPage",
+            "argument": "LESSON_TYPE_LABEL_KEY[lesson.lessonType]",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde"
+          }
+        ]
+      },
+      {
+        "id": "navigation-labels",
+        "unitIds": ["MLUX-C0003", "MLUX-C0007", "MLUX-C0004", "MLUX-C0006", "MLUX-C0005"],
+        "consumers": [
+          {
+            "sourcePath": "app/layouts/NavigationLinks.tsx",
+            "functionName": "NavigationLinks",
+            "argument": "item.labelKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb"
+          }
+        ]
+      },
+      {
+        "id": "route-titles",
+        "unitIds": [
+          "MLUX-C0010",
+          "MLUX-C0007",
+          "MLUX-C0004",
+          "MLUX-C0006",
+          "MLUX-C0028",
+          "MLUX-C0026",
+          "MLUX-C0037",
+          "MLUX-C0039",
+          "MLUX-C0033",
+          "MLUX-C0041",
+          "MLUX-C0031",
+          "MLUX-C0035",
+          "MLUX-C0044",
+          "MLUX-C0024",
+          "MLUX-C0046"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "app/router/RouteErrorBoundary.tsx",
+            "functionName": "ApplicationTitleBoundary",
+            "argument": "route.titleKey",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
+          }
+        ]
+      },
+      {
+        "id": "sort-labels",
+        "unitIds": [
+          "MLUX-C0150",
+          "MLUX-C0148",
+          "MLUX-C0147",
+          "MLUX-C0154",
+          "MLUX-C0153",
+          "MLUX-C0151"
+        ],
+        "consumers": [
+          {
+            "sourcePath": "pages/catalog-page/SortControl.tsx",
+            "functionName": "labelFor",
+            "argument": "label.key",
+            "occurrence": 1,
+            "sourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344"
+          }
+        ]
+      }
+    ],
+    "translatorDependencies": [
+      {
+        "sourcePath": "pages/signup-page/RolePicker.tsx",
+        "functionName": "RolePicker",
+        "bindingName": "t",
+        "hookName": "useMemo",
+        "sourceFingerprint": "sha256:02bff34271831eefaabac86fc6a4fa1baf42608057205e198c6e11a69454ef5c"
+      }
+    ],
+    "reconciliations": [
+      {
+        "request": {
+          "taskId": "CRF-002",
+          "sources": [
+            {
+              "sourcePath": "pages/cart-page/CartPage.tsx",
+              "expectedSourceFingerprint": "sha256:8ea0b407f242c4fbf8cb88a2c5fa979457d4c8f9ec90f98974d00e078683af4d"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:4be81b963669a36476cb3cb717b042ab74aa126cc7db0328898cb03d796ba62e",
+        "sources": [
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "sourceFingerprint": "sha256:1be1c92c6eb003d27749c6c3d8f03f342cf9400d8c880bbd62440ed8ab4c7464",
+            "entryCount": 12
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "CRF-002",
+          "sources": [
+            {
+              "sourcePath": "pages/cart-page/CartPage.tsx",
+              "expectedSourceFingerprint": "sha256:1be1c92c6eb003d27749c6c3d8f03f342cf9400d8c880bbd62440ed8ab4c7464"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:4ca4d53d8df917f39ba2b489395dc7a9b810e2eacf6386365dbfd50af87b6d4d",
+        "sources": [
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "sourceFingerprint": "sha256:71d863870e302b87534e364af9d2190414b5c458027f2f20e7dc07d97ec37d8c",
+            "entryCount": 12
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "CRF-002",
+          "sources": [
+            {
+              "sourcePath": "pages/cart-page/CartPage.tsx",
+              "expectedSourceFingerprint": "sha256:71d863870e302b87534e364af9d2190414b5c458027f2f20e7dc07d97ec37d8c"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:77dfb2fab5ea6c3d306c368fc1757eeff77b35d1e503b58344b7679dd16e19d6",
+        "sources": [
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "sourceFingerprint": "sha256:ca13f06613d8768ec89197600aac518cf6a72ae9ab423b5a0e381d6a865a19e8",
+            "entryCount": 12
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-068",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AccountMenu.tsx",
+              "expectedSourceFingerprint": "sha256:45f427f4a53dd4209b93013acd8ae2970074bf1ffaf06aafe345b20aa0774586"
+            },
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:197b55f9750b7f9c498ab5dbad8ac773d81d309638ac80631644263acfd12d88"
+            },
+            {
+              "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+              "expectedSourceFingerprint": "sha256:ca9280e6a42e6c5b29b9eb35900cefe62d8997dfcb8d15174d800421d31e6b90"
+            },
+            {
+              "sourcePath": "pages/catalog-page/SortControl.tsx",
+              "expectedSourceFingerprint": "sha256:d2e004fcb1858009b54f44c5e07a3a4e5ad323aef8bdded34f29c0b624fc92f2"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:c3aa4f9756835c511c858ec62bfaf4a232b28365b4c16fac070a5825d4dd2112",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AccountMenu.tsx",
+            "sourceFingerprint": "sha256:e7a7f6e6032be88f2dcfc227df61bb9dc10a6bb3aaf62b416b2d58c59923e9b5",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:69e3314ec442fedad7c682bc04471db93cc461e167d42a67c1cba8664797003a",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+            "sourceFingerprint": "sha256:8f899e32cd19dbeb878bb266f392c1568fab61c23a246109cc6d5e834b077bf6",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "pages/catalog-page/SortControl.tsx",
+            "sourceFingerprint": "sha256:ac00f0ab138e2b92571b24d08d1b35d8311b187946bd7a73598789941ddfca89",
+            "entryCount": 1
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-068",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AccountMenu.tsx",
+              "expectedSourceFingerprint": "sha256:e7a7f6e6032be88f2dcfc227df61bb9dc10a6bb3aaf62b416b2d58c59923e9b5"
+            },
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:9bdc8688b0b144d433b4621f39011210a6826463cc49273a8843a2ca4d5c00c8"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:bbb28d2dbfcd234952753fb9eee89256d979d83d3bdc2054dd8c874fdddf7463",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AccountMenu.tsx",
+            "sourceFingerprint": "sha256:b774c4c7e4cdb11a34b95872d3066038e3b23007ac8e027fc49b5ac19efc8b08",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:98fdd061364d6e3c237a38c3def49b115ce94441e5da906a4f55be28227104a9",
+            "entryCount": 1
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-068",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AccountMenu.tsx",
+              "expectedSourceFingerprint": "sha256:b774c4c7e4cdb11a34b95872d3066038e3b23007ac8e027fc49b5ac19efc8b08"
+            },
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:98fdd061364d6e3c237a38c3def49b115ce94441e5da906a4f55be28227104a9"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:9317ee6083c6e616a493086819a1aa53b44a04e3136124bbb3ecc8a28e66f28a",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AccountMenu.tsx",
+            "sourceFingerprint": "sha256:56ff96e58664d0835be22a544e6b81eee33ba78e398ffc46964b6a2e985f9c5a",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:05d9e6c0622576e0bd1e50827bbeacdd6113bc776e547b49282e37ce54ac442e",
+            "entryCount": 1
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-068",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:3f9507cd7ccc0ca99c9f0ffc1aae508839335f83485031f72b3caf5d0681e0c7"
+            },
+            {
+              "sourcePath": "pages/cart-page/CartPage.tsx",
+              "expectedSourceFingerprint": "sha256:938ca5323ed433de91af3d361a627c5a1559bf3129f2fa04b0578272263ec3c8"
+            },
+            {
+              "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+              "expectedSourceFingerprint": "sha256:5f4cd50b1b983dfaf387914588b076d4c009cccc22396b8def74a52246f27702"
+            },
+            {
+              "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+              "expectedSourceFingerprint": "sha256:5fb2661b09cf4f1f8d86941745f619acffd7c7e1ed2c30a387a72faaedfe1bad"
+            },
+            {
+              "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
+              "expectedSourceFingerprint": "sha256:624be4f88051166b3127a863d1256476f5989372358ccdcfce3758913ffdcbfb"
+            },
+            {
+              "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
+              "expectedSourceFingerprint": "sha256:749923dbddbf6fba6f412d0c3ba296295ad3fdab067b9ca62c8f4019206c20b6"
+            },
+            {
+              "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+              "expectedSourceFingerprint": "sha256:458dcb14a0d15b2f30f0fa571ecd2b6300d918cd31b89af5c53de31dc03c9229"
+            },
+            {
+              "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+              "expectedSourceFingerprint": "sha256:2f5f55fa41d313d15e4cc931a8db19ced0572705a117bc7cb332113eba216aff"
+            }
+          ],
+          "obsolete": [
+            {
+              "kind": "translatorWrapper",
+              "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+              "functionName": "lessonTypeLabel",
+              "bindingName": "t"
+            },
+            {
+              "kind": "dynamicConsumer",
+              "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+              "functionName": "lessonTypeLabel",
+              "bindingName": "LESSON_TYPE_LABEL_KEYS[lessonType]",
+              "familyId": "lesson-type-labels"
+            }
+          ]
+        },
+        "requestDigest": "sha256:e6d81e28bf901bf420865fff96dadb5a52e5d8442885c51f273d54aa8e93c71a",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:f50633a6f1cf45454af074c6bba5e239f734f0d546f2a6866426ad0b43ff56fd",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "sourceFingerprint": "sha256:6a53a57125deeb48324396471d830446dbd844994770488ecaadf6350d70fc03",
+            "entryCount": 12
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "sourceFingerprint": "sha256:c748312ff8bbc6941f134c82018f676141f08e687fb8a605e0f1848360735014",
+            "entryCount": 4
+          },
+          {
+            "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+            "sourceFingerprint": "sha256:b93fa7d611c38013a6d0deb7f558410b1473eae2fc89e06feb1dc407937602d2",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
+            "sourceFingerprint": "sha256:c9f76c4b3680bd3cf7f1a8c982140db158591ba5d75ac5b3481383ced7b81915",
+            "entryCount": 2
+          },
+          {
+            "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
+            "sourceFingerprint": "sha256:ae9b117bb37674e8526de306dcc004fe9092a2e11f5bc693329b7c8eab5f2478",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+            "sourceFingerprint": "sha256:6283863330fced0e58d44f9ff6fd593ffec8f99952168632de5380f66030da66",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+            "sourceFingerprint": "sha256:f9f1cd9e86569575973af8f2e91b53c938dea561ecfdeb24a285ae59378e48a3",
+            "entryCount": 1
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-068",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AccountMenu.tsx",
+              "expectedSourceFingerprint": "sha256:56ff96e58664d0835be22a544e6b81eee33ba78e398ffc46964b6a2e985f9c5a"
+            },
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:f50633a6f1cf45454af074c6bba5e239f734f0d546f2a6866426ad0b43ff56fd"
+            },
+            {
+              "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+              "expectedSourceFingerprint": "sha256:065072d8c1225905c8ea7fbf2cbfa7b36ef28f885019ca00256992d1424c661b"
+            },
+            {
+              "sourcePath": "pages/catalog-page/CourseCard.tsx",
+              "expectedSourceFingerprint": "sha256:e4270db22cc7b69461ff2a6f0e713ef876cf8bc7c737f1479ff8c03935ce78ed"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:03c962c074355e49b8426ae56b8140251ba8eba6ef5b70db27c06dde7bec2e17",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AccountMenu.tsx",
+            "sourceFingerprint": "sha256:48cd610c01ee54b7416b9151fc8816a6fe4403ec4da6258a95272095af3c8de8",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:08d3aa3c184e9e9c800e33f5840f8549a714a8963fbd24b004a6ac0568376d9b",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+            "sourceFingerprint": "sha256:701686a01f9c0d81d10df1d87ad7b07024c42f2872e1b551d962d6f833e30a69",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "pages/catalog-page/CourseCard.tsx",
+            "sourceFingerprint": "sha256:d8e208529d2a1d5fb1c7cbb851690deb17ef3f06970358b04793d78de7731330",
+            "entryCount": 2
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-068",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AccountMenu.tsx",
+              "expectedSourceFingerprint": "sha256:48cd610c01ee54b7416b9151fc8816a6fe4403ec4da6258a95272095af3c8de8"
+            },
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:9581010a8f8934d5c972f7b068089f686ed307dc7c481b86ddce691d8fa64e7f"
+            },
+            {
+              "sourcePath": "pages/cart-page/CartPage.tsx",
+              "expectedSourceFingerprint": "sha256:44109b84d491b41ab01df076cd2c233201b6458bbfd6458baffc8932d33e2f24"
+            },
+            {
+              "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+              "expectedSourceFingerprint": "sha256:b93fa7d611c38013a6d0deb7f558410b1473eae2fc89e06feb1dc407937602d2"
+            },
+            {
+              "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
+              "expectedSourceFingerprint": "sha256:96b06476fd00a40586e8dcc28beb9b0ec4c777682527dd5a81b2c169f082c1f6"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:cdc71fcec915f01df8830b63feadb20d23ffac682bf38162c3ae83bfa5070d22",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AccountMenu.tsx",
+            "sourceFingerprint": "sha256:c5a17333cf192b5f53048b85f381c0036e5c46240b3570945da2a444cb42f0bb",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:3befb734af8e0c9269c416b9d621b71a439f6fa4d31ef7d16166c6ae526c1a6d",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "sourceFingerprint": "sha256:5ad58ef5e4de7e4865c895bc076fff01751475dc60fd33d4b84b659f6376778f",
+            "entryCount": 12
+          },
+          {
+            "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+            "sourceFingerprint": "sha256:5b5f64fe8a41e4342236e4b9cf141ce177c0acc7b02bdc8eed56e8171f2eccac",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "pages/instructor-courses-page/InstructorCoursesPage.tsx",
+            "sourceFingerprint": "sha256:9f6ce1e72b63ea3140e14f5c6878ad21543093bc6526c8cbd171342e92b14e57",
+            "entryCount": 2
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-029",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:fdec331974c617a15801a6220daf3411f3d24f974f6e7ceff91f65cc4f424638"
+            },
+            {
+              "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+              "expectedSourceFingerprint": "sha256:05d585ec7a4605a0b91d404c18e13990079f1e7479a3598028d82ee494e13943"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:a848c3e8cbdc15d62c2629c619cd4d636e3a399b1a957cb9591839bf362ad627",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:414628a77a85df9235df0bc5d91cfb849618c85549c399feb9b73e8224246ba6",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+            "sourceFingerprint": "sha256:5b397477c7463a284cdbcaa48f0c6995b3d942926b61e3e07cd38672bfd71cf7",
+            "entryCount": 3
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "CRF-004",
+          "sources": [
+            {
+              "sourcePath": "app/router/RouteErrorBoundary.tsx",
+              "expectedSourceFingerprint": "sha256:72550b6247b69f1fc2de594fd4c1f8c3d23e7daf7e729cc20f0f2801e087aedc"
+            },
+            {
+              "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
+              "expectedSourceFingerprint": "sha256:ae9b117bb37674e8526de306dcc004fe9092a2e11f5bc693329b7c8eab5f2478"
+            },
+            {
+              "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+              "expectedSourceFingerprint": "sha256:6283863330fced0e58d44f9ff6fd593ffec8f99952168632de5380f66030da66"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:cf3853dd8df37dfede457054c270f1c0c074d44693ae8c395b1de99ad1f8906e",
+        "sources": [
+          {
+            "sourcePath": "app/router/RouteErrorBoundary.tsx",
+            "sourceFingerprint": "sha256:55ee6f53e3f2a18b186befc606cc7f1cce8a1109e5b0b5ee81eb7f6eb6f0ed18",
+            "entryCount": 2
+          },
+          {
+            "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
+            "sourceFingerprint": "sha256:c938607eb1be97d14eab0b72279836f75a885fd3d3979e18b906d65ad8ca9e6a",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+            "sourceFingerprint": "sha256:1d6b2462c49fb483e02b8242ef6a0657a058ab326f3a1040ee7f84fe3cca28cd",
+            "entryCount": 3
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "CRF-004",
+          "sources": [
+            {
+              "sourcePath": "pages/cart-page/CartPage.tsx",
+              "expectedSourceFingerprint": "sha256:f06cf12a8fb3c1b7af591bb87f3e443bd602bf2e4c9fbc2d707ce5f5cd5e60b9"
+            },
+            {
+              "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+              "expectedSourceFingerprint": "sha256:c748312ff8bbc6941f134c82018f676141f08e687fb8a605e0f1848360735014"
+            },
+            {
+              "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+              "expectedSourceFingerprint": "sha256:5b5f64fe8a41e4342236e4b9cf141ce177c0acc7b02bdc8eed56e8171f2eccac"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:3509bec445cd90443857ea63c9e49f546c932a4fcd75355e8dc1bd2a3c475636",
+        "sources": [
+          {
+            "sourcePath": "pages/cart-page/CartPage.tsx",
+            "sourceFingerprint": "sha256:2edd7b88d1d7903cd6757548dae47f03d72aae934b3b93cda5b85f63b6db9976",
+            "entryCount": 12
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "sourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d",
+            "entryCount": 4
+          },
+          {
+            "sourcePath": "pages/instructor-course-editor-page/InstructorCourseEditorPage.tsx",
+            "sourceFingerprint": "sha256:09b82081f3634c98c1e203829597085caa21a3d6a7ead0f0373a89d795b2abde",
+            "entryCount": 3
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-068",
+          "sources": [
+            {
+              "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+              "expectedSourceFingerprint": "sha256:d5565eeb302b625458f8d619bc187cb876ae3833da5d03e28e911d44d65e11f9"
+            },
+            {
+              "sourcePath": "pages/catalog-page/CourseCard.tsx",
+              "expectedSourceFingerprint": "sha256:d8e208529d2a1d5fb1c7cbb851690deb17ef3f06970358b04793d78de7731330"
+            },
+            {
+              "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+              "expectedSourceFingerprint": "sha256:bf0128be89c9a578188ccab566a571fc3d61d195850d849efb7ee8bd5c466f0d"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:89bcb2c3eeae45c7a1caf2472c6dd59be40319f55b2d6747626d79d16f7db215",
+        "sources": [
+          {
+            "sourcePath": "pages/catalog-page/CatalogPage.tsx",
+            "sourceFingerprint": "sha256:593fd7d79d6ba7ef2e0a4f7feef720e825af959f289565ecc858bda8207bc611",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "pages/catalog-page/CourseCard.tsx",
+            "sourceFingerprint": "sha256:09912527459f5b4dcc03753aadce2ae7795e0bf1efea71a3c260fccc6dae4cf7",
+            "entryCount": 2
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d",
+            "entryCount": 4
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-073",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:d254036f97c45cd38c7775e7b799f899cc2a11c691f5310d1a840edce7a959e8"
+            },
+            {
+              "sourcePath": "app/layouts/NavigationLinks.tsx",
+              "expectedSourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb"
+            },
+            {
+              "sourcePath": "app/router/RouteErrorBoundary.tsx",
+              "expectedSourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
+            },
+            {
+              "sourcePath": "pages/catalog-page/CourseCard.tsx",
+              "expectedSourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
+            },
+            {
+              "sourcePath": "pages/catalog-page/SortControl.tsx",
+              "expectedSourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344"
+            },
+            {
+              "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+              "expectedSourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
+            },
+            {
+              "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+              "expectedSourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
+            },
+            {
+              "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+              "expectedSourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf"
+            }
+          ],
+          "replacements": [
+            {
+              "familyId": "navigation-labels",
+              "oldConsumer": {
+                "sourcePath": "app/layouts/AppShell.tsx",
+                "functionName": "NavigationLinks",
+                "argument": "item.labelKey",
+                "occurrence": 1
+              },
+              "newConsumer": {
+                "sourcePath": "app/layouts/NavigationLinks.tsx",
+                "functionName": "NavigationLinks",
+                "argument": "item.labelKey",
+                "occurrence": 1
+              }
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:1d05ad6ce54adaf3a7dd550a6d2e4c331431c9e83fc2546fe43c2a5fd2ac00e4",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:d254036f97c45cd38c7775e7b799f899cc2a11c691f5310d1a840edce7a959e8",
+            "entryCount": 0
+          },
+          {
+            "sourcePath": "app/layouts/NavigationLinks.tsx",
+            "sourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "app/router/RouteErrorBoundary.tsx",
+            "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b",
+            "entryCount": 2
+          },
+          {
+            "sourcePath": "pages/catalog-page/CourseCard.tsx",
+            "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301",
+            "entryCount": 2
+          },
+          {
+            "sourcePath": "pages/catalog-page/SortControl.tsx",
+            "sourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199",
+            "entryCount": 4
+          },
+          {
+            "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+            "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+            "sourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf",
+            "entryCount": 1
+          }
+        ]
+      }
+    ]
+  }
 }
