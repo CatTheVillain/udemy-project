@@ -40,6 +40,8 @@ interface SignupMutationVariables {
   readonly values: SignupInput;
 }
 
+type SignupInputValue<TKey extends keyof SignupInput> = SignupInput[TKey];
+
 export interface SignupWorkflow {
   readonly fieldErrors: AuthFieldErrors;
   readonly input: SignupInput;
@@ -47,7 +49,7 @@ export interface SignupWorkflow {
   readonly summary: AuthMessage | null;
   readonly summaryRef: RefObject<HTMLDivElement>;
   submit(event: FormEvent): Promise<void>;
-  update<K extends keyof SignupInput>(key: K, value: SignupInput[K]): void;
+  update<K extends keyof SignupInput>(key: K, value: SignupInputValue<K>): void;
 }
 
 export function useSignupWorkflow(ownerKey: string): SignupWorkflow {
@@ -68,7 +70,7 @@ export function useSignupWorkflow(ownerKey: string): SignupWorkflow {
     gcTime: 0,
     retry: false,
   });
-  const update = <K extends keyof SignupInput>(key: K, value: SignupInput[K]) => {
+  const update = <K extends keyof SignupInput>(key: K, value: SignupInputValue<K>) => {
     setInput((current) => ({ ...current, [key]: value }));
     setFieldErrors((current) => {
       if (!current[key]) return current;

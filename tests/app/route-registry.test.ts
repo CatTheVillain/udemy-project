@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchPath } from 'react-router-dom';
+import { matchPath, matchRoutes } from 'react-router-dom';
 
 import registry from '../../localization/corpus/registry.json';
 import {
@@ -9,6 +9,11 @@ import {
   homeForRole,
   routeForPath,
 } from '../../src/app/router';
+import {
+  hasEveryRouteId,
+  type AppRouteDefinition,
+  type PageId,
+} from '../../src/app/router/route-registry';
 
 interface ExpectedRouteTitleBinding {
   readonly id: (typeof APP_ROUTES)[number]['id'];
@@ -32,6 +37,18 @@ const MLUX_003_EXPECTED_ROUTE_TITLE_BINDINGS: readonly ExpectedRouteTitleBinding
   { id: 'PAGE-012', titleKey: 'routes:courseEnrollmentsTitle' },
   { id: 'PAGE-013', titleKey: 'routes:editLessonTitle' },
 ];
+
+const INSTALLED_ROUTER_ROUTES = APP_ROUTES.map(({ id, path }) => ({ id, path }));
+
+function installedRouterRouteId(location: URL): string | undefined {
+  const matches = matchRoutes(INSTALLED_ROUTER_ROUTES, {
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash,
+  });
+
+  return matches?.[matches.length - 1]?.route.id;
+}
 
 function routeBindingViolations(bindings: readonly ExpectedRouteTitleBinding[]): readonly string[] {
   const expectedById = new Map(
@@ -101,6 +118,23 @@ describe('application route registry', () => {
     expect('PAGE-015' in APP_ROUTE_BY_ID).toBe(true);
   });
 
+  it('rejects a same-cardinality route map that replaces a registered PageId', () => {
+    const missingPageId: PageId = 'PAGE-015';
+    const routeById: Partial<Record<PageId, AppRouteDefinition>> = {};
+
+    for (const route of APP_ROUTES) {
+      if (route.id !== missingPageId) routeById[route.id] = route;
+    }
+    Object.defineProperty(routeById, 'PAGE-999', {
+      enumerable: true,
+      value: APP_ROUTES[0],
+    });
+
+    expect(Object.keys(routeById)).toHaveLength(APP_ROUTES.length);
+    expect(hasEveryRouteId(routeById)).toBe(false);
+    expect(hasEveryRouteId(APP_ROUTE_BY_ID)).toBe(true);
+  });
+
   it('keeps every registered page bound to an independently enumerated canonical title key', () => {
     const bindings = APP_ROUTES.map(({ id, titleKey }) => ({ id, titleKey }));
     const mappedLocaleKeys = new Set(
@@ -151,6 +185,42 @@ describe('application route registry', () => {
     ['/instructor/courses/a%2Fb/enrollments', 'PAGE-012'],
   ] as const)('matches installed Router semantics for %s', (pathname, expectedId) => {
     expect(routeForPath(pathname)?.id).toBe(expectedId);
+  });
+
+  it.each([
+    '/LOGIN',
+    '/login/',
+    '/courses/%E2%9C%93',
+    '/courses/%E0%A4%A',
+    '/instructor/courses',
+    '/instructor/courses/course%2F42/edit',
+    '/instructor/courses/course%2F42/enrollments',
+    '/instructor/courses/42',
+    '/login?returnTo=%2Fcart#recovery',
+    '/instructor/courses?tab=drafts#overview',
+    '/does-not-exist?returnTo=%2Flearning#missing',
+  ] as const)(
+    'keeps registry metadata in parity with installed Router matching for %s',
+    (target) => {
+      const location = new URL(target, 'https://learnhub.test');
+
+      expect(routeForPath(location.pathname)?.id).toBe(installedRouterRouteId(location));
+    },
+  );
+
+  it('keeps encoded login recovery and instructor workspace metadata distinct', () => {
+    expect(routeForPath('/l%6Fgin')).toMatchObject({
+      id: 'PAGE-004',
+      access: 'guest',
+      layout: 'auth',
+    });
+    expect(densityForPath('/l%6Fgin')).toBe('marketplace');
+    expect(routeForPath('/instruct%6Fr/courses')).toMatchObject({
+      id: 'PAGE-010',
+      access: 'instructor',
+      layout: 'workspace',
+    });
+    expect(densityForPath('/instruct%6Fr/courses')).toBe('workspace');
   });
 
   it.each(['/login/help', '/learning/enrollments/42/extra', '/instructor/courses/42'])(

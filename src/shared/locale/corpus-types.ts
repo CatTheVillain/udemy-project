@@ -15,14 +15,14 @@ export type LocalizationNamespace =
   | 'navigation'
   | 'routes';
 export type LocaleReviewStatus =
-  | 'draft'
-  | 'review_requested'
-  | 'changes_requested'
-  | 'approved'
-  | 'stale';
+  'draft' | 'review_requested' | 'changes_requested' | 'approved' | 'stale';
 
 export interface SourceRevision {
   readonly value: string;
+}
+
+export interface LocalizationSourceHash {
+  readonly sha256: string;
 }
 
 export interface RetirementProvenance {
@@ -74,10 +74,7 @@ export interface LocalizationCorpusExclusion {
   readonly sourceCategory: string;
   readonly origin: string;
   readonly status:
-    | 'Excluded'
-    | 'Excluded or reconstructed'
-    | 'Excluded when nonconforming'
-    | 'Consolidated';
+    'Excluded' | 'Excluded or reconstructed' | 'Excluded when nonconforming' | 'Consolidated';
   readonly boundaryReason: string;
 }
 
@@ -152,8 +149,7 @@ export interface NonApprovedLocaleCandidate extends LocaleCandidateBase {
 }
 
 export type ApprovedLocaleCandidate =
-  | HumanNativeApprovedLocaleCandidate
-  | SuppliedReviewArtifactApprovedLocaleCandidate;
+  HumanNativeApprovedLocaleCandidate | SuppliedReviewArtifactApprovedLocaleCandidate;
 
 export type LocaleCandidate = ApprovedLocaleCandidate | NonApprovedLocaleCandidate;
 
@@ -170,8 +166,7 @@ export interface SuppliedReviewArtifactApprovalAuthority {
 }
 
 export type LocaleApprovalAuthority =
-  | HumanNativeReviewApprovalAuthority
-  | SuppliedReviewArtifactApprovalAuthority;
+  HumanNativeReviewApprovalAuthority | SuppliedReviewArtifactApprovalAuthority;
 
 export interface HumanNativeReviewApprovalRecord {
   readonly reviewerId: string;
@@ -189,8 +184,7 @@ export interface SuppliedReviewArtifactApprovalRecord {
 }
 
 export type LocaleApprovalRecord =
-  | HumanNativeReviewApprovalRecord
-  | SuppliedReviewArtifactApprovalRecord;
+  HumanNativeReviewApprovalRecord | SuppliedReviewArtifactApprovalRecord;
 
 export interface LocaleChangeRequestRecord {
   readonly replacement: string;
@@ -214,8 +208,7 @@ export interface LocaleTransitionHistoryEventBase {
   readonly nextCandidate: string;
 }
 
-export interface LocaleDraftToReviewRequestedTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleDraftToReviewRequestedTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'draft';
   readonly to: 'review_requested';
   readonly sourceRevision: string;
@@ -223,8 +216,7 @@ export interface LocaleDraftToReviewRequestedTransitionHistoryEvent
   readonly suppliedArtifactApproval?: never;
 }
 
-export interface LocaleReviewRequestedToHumanApprovedTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleReviewRequestedToHumanApprovedTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'review_requested';
   readonly to: 'approved';
   readonly sourceRevision: string;
@@ -232,8 +224,7 @@ export interface LocaleReviewRequestedToHumanApprovedTransitionHistoryEvent
   readonly suppliedArtifactApproval?: never;
 }
 
-export interface LocaleReviewRequestedToSuppliedArtifactApprovedTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleReviewRequestedToSuppliedArtifactApprovedTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'review_requested';
   readonly to: 'approved';
   readonly sourceRevision: string;
@@ -245,8 +236,7 @@ export type LocaleReviewRequestedToApprovedTransitionHistoryEvent =
   | LocaleReviewRequestedToHumanApprovedTransitionHistoryEvent
   | LocaleReviewRequestedToSuppliedArtifactApprovedTransitionHistoryEvent;
 
-export interface LocaleReviewRequestedToChangesRequestedTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleReviewRequestedToChangesRequestedTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'review_requested';
   readonly to: 'changes_requested';
   readonly sourceRevision: string;
@@ -255,8 +245,7 @@ export interface LocaleReviewRequestedToChangesRequestedTransitionHistoryEvent
   readonly suppliedArtifactApproval?: never;
 }
 
-export interface LocaleReviewRequestedToDraftWithdrawalTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleReviewRequestedToDraftWithdrawalTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'review_requested';
   readonly to: 'draft';
   readonly sourceRevision: string;
@@ -266,8 +255,7 @@ export interface LocaleReviewRequestedToDraftWithdrawalTransitionHistoryEvent
   readonly suppliedArtifactApproval?: never;
 }
 
-export interface LocaleReviewRequestedToStaleTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleReviewRequestedToStaleTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'review_requested';
   readonly to: 'stale';
   readonly sourceRevision: string;
@@ -275,8 +263,7 @@ export interface LocaleReviewRequestedToStaleTransitionHistoryEvent
   readonly suppliedArtifactApproval?: never;
 }
 
-export interface LocaleChangesRequestedToDraftTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleChangesRequestedToDraftTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'changes_requested';
   readonly to: 'draft';
   readonly sourceRevision: string;
@@ -284,8 +271,7 @@ export interface LocaleChangesRequestedToDraftTransitionHistoryEvent
   readonly suppliedArtifactApproval?: never;
 }
 
-export interface LocaleChangesRequestedToStaleTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleChangesRequestedToStaleTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'changes_requested';
   readonly to: 'stale';
   readonly sourceRevision: string;
@@ -293,8 +279,7 @@ export interface LocaleChangesRequestedToStaleTransitionHistoryEvent
   readonly suppliedArtifactApproval?: never;
 }
 
-export interface LocaleApprovedToStaleTransitionHistoryEvent
-  extends LocaleTransitionHistoryEventBase {
+export interface LocaleApprovedToStaleTransitionHistoryEvent extends LocaleTransitionHistoryEventBase {
   readonly from: 'approved';
   readonly to: 'stale';
   readonly sourceRevision: string;
@@ -331,8 +316,7 @@ export type LocaleTransitionHistoryEvent =
   | LocaleNonReviewTransitionHistoryEvent;
 
 export type LocaleCandidateHistoryEvent =
-  | LocaleSourceRevisionHistoryEvent
-  | LocaleTransitionHistoryEvent;
+  LocaleSourceRevisionHistoryEvent | LocaleTransitionHistoryEvent;
 
 export interface I18nextRenderingContract {
   readonly mode: 'i18next';
@@ -343,8 +327,7 @@ export interface ManualTemplateRenderingContract {
 }
 
 export type LocalizationRenderingContract =
-  | I18nextRenderingContract
-  | ManualTemplateRenderingContract;
+  I18nextRenderingContract | ManualTemplateRenderingContract;
 
 export interface LocalizationUnit {
   readonly id: string;
@@ -370,11 +353,7 @@ export interface UnitMigrationProvenance {
 }
 
 export type MigrationOwnerTask =
-  | 'MLUX-002'
-  | 'MLUX-003'
-  | 'MLUX-004'
-  | 'MLUX-005'
-  | 'MLUX-006-FOLLOWUP';
+  'MLUX-002' | 'MLUX-003' | 'MLUX-004' | 'MLUX-005' | 'MLUX-006-FOLLOWUP';
 
 export interface CorpusMigrationProvenance {
   readonly sourceVersion: LocalizationCorpusVersion;
@@ -388,7 +367,7 @@ export interface CorpusMigrationProvenance {
 export interface LocalizationCorpus {
   readonly formatVersion: 1;
   readonly corpusVersion: LocalizationCorpusVersion;
-  readonly source: { readonly sha256: string };
+  readonly source: LocalizationSourceHash;
   readonly consumerGrammar: LocalizationConsumerGrammar;
   readonly baselineResources: BaselineLocaleResources;
   readonly summary: LocalizationCorpusSummary;

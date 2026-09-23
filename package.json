@@ -31,28 +31,26 @@
     "quality": "node scripts/quality/run-quality.mjs",
     "quality:verify-report": "node scripts/quality/verify-report.mjs",
     "quality:verify-ci-aggregate": "node scripts/quality/verify-ci-aggregate.mjs",
-    "precommit:staged": "lint-staged",
+    "precommit:staged": "lint-staged --concurrent false && node scripts/localization/check-staged.mjs",
     "prepare": "husky",
     "preview": "vite preview"
   },
   "lint-staged": {
     "!(*generated-resources).{ts,tsx,cjs,mjs}": [
-      "prettier --write",
+      "prettier --check",
       "eslint --max-warnings 0"
     ],
     "src/shared/locale/generated-resources.ts": [
-      "eslint --max-warnings 0",
-      "npm run localization:check"
+      "eslint --max-warnings 0"
     ],
     "localization/corpus/registry.json": [
-      "prettier --write",
-      "npm run localization:check"
+      "prettier --check"
     ],
     "*.css": [
-      "prettier --write",
+      "prettier --check",
       "stylelint --max-warnings 0"
     ],
-    "*.{json,md,yml,yaml}": "prettier --write"
+    "*.{json,md,yml,yaml}": "prettier --check"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.3",

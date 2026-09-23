@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 export const SUPPORTED_LOCALES = ['en', 'ru', 'uz'] as const;
 
-export type Locale = (typeof SUPPORTED_LOCALES)[number];
+export type Locale = 'en' | 'ru' | 'uz';
 
 export type TranslatedLocale = Exclude<Locale, 'en'>;
 

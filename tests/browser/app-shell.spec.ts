@@ -2656,6 +2656,52 @@ test('shows a bootstrap state then student-only workspace navigation', async ({ 
   assertRuntimeClean();
 });
 
+test('keeps the tablet drawer present through a normal navigation before focusing its destination', async ({
+  page,
+}) => {
+  const assertRuntimeClean = monitorRuntime(
+    page,
+    [],
+    [],
+    [CART_STRICT_MODE_ABORT, ENROLLMENTS_STRICT_MODE_ABORT],
+  );
+  await mockAuthenticatedSession(page, 'student');
+  await mockStudentWorkspaceData(page);
+  await page.route('**/courses**', async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [],
+        page: 1,
+        page_size: 20,
+        total: 0,
+        pages: 0,
+        has_next: false,
+        has_previous: false,
+      }),
+    }),
+  );
+  await page.setViewportSize({ width: 890, height: 900 });
+  await page.goto('/learning');
+  await expect(page.getByRole('heading', { level: 1, name: 'My learning' })).toBeVisible();
+
+  const navigationTrigger = page.getByRole('button', { name: 'Open navigation' });
+  await navigationTrigger.click();
+  const drawer = page.getByRole('dialog', { name: 'Menu' });
+  const catalog = drawer.getByRole('link', { name: 'Catalog', exact: true });
+  await expect(drawer).toBeVisible();
+  await expect(catalog).toHaveAttribute('href', '/');
+
+  await catalog.click();
+  await expect(page).toHaveURL('/');
+  await expect(drawer).toBeVisible();
+  await expect(drawer).toHaveCount(0);
+  await expect(page.locator('#main-content')).toBeFocused();
+  await expectNoHorizontalOverflow(page);
+  assertRuntimeClean();
+});
+
 test('keeps the student Catalog, Search, Cart, and account slots stable across Catalog, My learning, and Cart', async ({
   page,
 }) => {
@@ -3786,6 +3832,50 @@ test('keeps focused skip navigation above sticky search chrome and below the dia
   expect(Number(dropdownLayers.searchListbox)).toBeLessThan(Number(dropdownLayers.header));
   expect(Number(dropdownLayers.header)).toBeLessThan(Number(focusedSkipLayers.skip));
   expect(Number(focusedSkipLayers.skip)).toBeLessThan(Number(focusedSkipLayers.modal));
+  await expectNoHorizontalOverflow(page);
+  assertRuntimeClean();
+});
+
+test('keeps catalog search history Enter, pointer, and touch selection focus-safe and canonical', async ({
+  page,
+}) => {
+  const assertRuntimeClean = monitorRuntime(page);
+  await page.addInitScript(() => {
+    localStorage.setItem('learnhub.catalog-search-history', JSON.stringify(['React', 'Redux']));
+  });
+  await installCatalogFixture(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/?sort=-price&page=2');
+
+  const search = page.getByRole('combobox', { name: 'Search courses' });
+  await search.focus();
+  await search.fill('rea');
+  const filteredHistory = page.getByRole('listbox', { name: 'Recent searches' });
+  await expect(filteredHistory.getByRole('option')).toHaveCount(1);
+  await expect(filteredHistory.getByRole('option', { name: 'React' })).toBeVisible();
+  await expect(filteredHistory.getByRole('option', { name: 'Redux' })).toHaveCount(0);
+  await page.keyboard.press('ArrowDown');
+  const react = page.getByRole('option', { name: 'React' });
+  const reactOptionId = await react.getAttribute('id');
+  expect(reactOptionId).not.toBeNull();
+  if (reactOptionId === null) throw new Error('React history option must have an id');
+  await expect(search).toHaveAttribute('aria-activedescendant', reactOptionId);
+  await expect(react).toHaveAttribute('aria-selected', 'true');
+  await expect(search).toBeFocused();
+
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/?search_query=React&sort=-price');
+  await expect(search).toBeFocused();
+  const retainedHistory = page.getByRole('listbox', { name: 'Recent searches' });
+  await expect(retainedHistory).toBeVisible();
+  await expect(retainedHistory.getByRole('option')).toHaveCount(2);
+  await expect(search).not.toHaveAttribute('aria-activedescendant', /.+/);
+
+  const redux = page.getByRole('option', { name: 'Redux' });
+  await redux.dispatchEvent('pointerdown', { pointerType: 'touch' });
+  await redux.dispatchEvent('click');
+  await expect(page).toHaveURL('/?search_query=Redux&sort=-price');
+  await expect(search).toBeFocused();
   await expectNoHorizontalOverflow(page);
   assertRuntimeClean();
 });

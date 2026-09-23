@@ -29,7 +29,7 @@ export interface CartNavigationState {
 }
 
 export interface AssistantNavigationTarget {
-  state: { returnTo: string } | undefined;
+  state: CartNavigationState | undefined;
   to: string;
 }
 

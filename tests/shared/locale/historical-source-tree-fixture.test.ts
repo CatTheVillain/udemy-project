@@ -142,6 +142,7 @@ describe('historical source tree fixture', () => {
     },
   );
 
+  // Three independent 263-file source trees can contend with the transaction fixture worker.
   it('materializes exact historical text and binary Git bytes into independent caller-owned trees after mutation', async () => {
     const request: HistoricalSourceTreeRequest = {
       repositoryRoot: resolve(process.cwd()),
@@ -167,5 +168,5 @@ describe('historical source tree fixture', () => {
     const third = await materializeHistoricalSourceTree(request);
     temporaryDirectories.push(third.directory);
     expect(await readFile(join(third.sourceRoot, sourcePath))).toEqual(expectedSource);
-  });
+  }, 15_000);
 });

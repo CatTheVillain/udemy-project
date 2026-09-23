@@ -37770,7 +37770,7 @@
         "sourcePath": "app/router/RouteErrorBoundary.tsx",
         "functionName": "resolveApplicationTitle",
         "bindingName": "t",
-        "sourceFingerprint": "sha256:55ee6f53e3f2a18b186befc606cc7f1cce8a1109e5b0b5ee81eb7f6eb6f0ed18"
+        "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
       },
       {
         "sourcePath": "features/auth-workflows/validation.ts",
@@ -37836,19 +37836,19 @@
         "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
         "functionName": "AssistantResponseError",
         "bindingName": "t",
-        "sourceFingerprint": "sha256:1d6b2462c49fb483e02b8242ef6a0657a058ab326f3a1040ee7f84fe3cca28cd"
+        "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
       },
       {
         "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
         "functionName": "AssistantTypingIndicator",
         "bindingName": "t",
-        "sourceFingerprint": "sha256:1d6b2462c49fb483e02b8242ef6a0657a058ab326f3a1040ee7f84fe3cca28cd"
+        "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
       },
       {
         "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
         "functionName": "errorCopy",
         "bindingName": "t",
-        "sourceFingerprint": "sha256:1d6b2462c49fb483e02b8242ef6a0657a058ab326f3a1040ee7f84fe3cca28cd"
+        "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
       }
     ],
     "translatorForwarders": [
@@ -38080,7 +38080,7 @@
             "functionName": "CourseCard",
             "argument": "`course:${action.feedback.messageKey}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:09912527459f5b4dcc03753aadce2ae7795e0bf1efea71a3c260fccc6dae4cf7"
+            "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
           },
           {
             "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
@@ -38128,7 +38128,7 @@
             "functionName": "CourseCard",
             "argument": "action.labelKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:09912527459f5b4dcc03753aadce2ae7795e0bf1efea71a3c260fccc6dae4cf7"
+            "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
           },
           {
             "sourcePath": "pages/course-detail-page/CourseActionPanel.tsx",
@@ -38183,7 +38183,7 @@
             "functionName": "CourseDetailPage",
             "argument": "failure.messageKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d"
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
           }
         ]
       },
@@ -38203,14 +38203,14 @@
             "functionName": "CourseDetailPage",
             "argument": "failure.titleKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d"
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
           },
           {
             "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
             "functionName": "CourseDetailPage",
             "argument": "failure.titleKey",
             "occurrence": 2,
-            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d"
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
           }
         ]
       },
@@ -38223,7 +38223,7 @@
             "functionName": "CourseDetailPage",
             "argument": "`course:${recoveryMessage}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d"
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
           }
         ]
       },
@@ -38381,7 +38381,7 @@
             "functionName": "EnrollmentProgressPanel",
             "argument": "`learning:${lessonCompletionLabelKey(displayState)}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:d82cf8f329b33a919f1f84e9515dd073b17de3f1a028ec2b5c779b61e8a92892"
+            "sourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf"
           }
         ]
       },
@@ -38410,11 +38410,11 @@
         "unitIds": ["MLUX-C0003", "MLUX-C0007", "MLUX-C0004", "MLUX-C0006", "MLUX-C0005"],
         "consumers": [
           {
-            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourcePath": "app/layouts/NavigationLinks.tsx",
             "functionName": "NavigationLinks",
             "argument": "item.labelKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:414628a77a85df9235df0bc5d91cfb849618c85549c399feb9b73e8224246ba6"
+            "sourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb"
           }
         ]
       },
@@ -38443,7 +38443,7 @@
             "functionName": "ApplicationTitleBoundary",
             "argument": "route.titleKey",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:55ee6f53e3f2a18b186befc606cc7f1cce8a1109e5b0b5ee81eb7f6eb6f0ed18"
+            "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
           }
         ]
       },
@@ -38463,7 +38463,7 @@
             "functionName": "labelFor",
             "argument": "label.key",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:ac00f0ab138e2b92571b24d08d1b35d8311b187946bd7a73598789941ddfca89"
+            "sourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344"
           }
         ]
       }
@@ -38983,6 +38983,106 @@
             "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
             "sourceFingerprint": "sha256:9911d89ae855dce6c043486697c565e7045330e4359cac818bf0537572ca735d",
             "entryCount": 4
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-073",
+          "sources": [
+            {
+              "sourcePath": "app/layouts/AppShell.tsx",
+              "expectedSourceFingerprint": "sha256:d254036f97c45cd38c7775e7b799f899cc2a11c691f5310d1a840edce7a959e8"
+            },
+            {
+              "sourcePath": "app/layouts/NavigationLinks.tsx",
+              "expectedSourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb"
+            },
+            {
+              "sourcePath": "app/router/RouteErrorBoundary.tsx",
+              "expectedSourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b"
+            },
+            {
+              "sourcePath": "pages/catalog-page/CourseCard.tsx",
+              "expectedSourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301"
+            },
+            {
+              "sourcePath": "pages/catalog-page/SortControl.tsx",
+              "expectedSourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344"
+            },
+            {
+              "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+              "expectedSourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199"
+            },
+            {
+              "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+              "expectedSourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa"
+            },
+            {
+              "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+              "expectedSourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf"
+            }
+          ],
+          "replacements": [
+            {
+              "familyId": "navigation-labels",
+              "oldConsumer": {
+                "sourcePath": "app/layouts/AppShell.tsx",
+                "functionName": "NavigationLinks",
+                "argument": "item.labelKey",
+                "occurrence": 1
+              },
+              "newConsumer": {
+                "sourcePath": "app/layouts/NavigationLinks.tsx",
+                "functionName": "NavigationLinks",
+                "argument": "item.labelKey",
+                "occurrence": 1
+              }
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:1d05ad6ce54adaf3a7dd550a6d2e4c331431c9e83fc2546fe43c2a5fd2ac00e4",
+        "sources": [
+          {
+            "sourcePath": "app/layouts/AppShell.tsx",
+            "sourceFingerprint": "sha256:d254036f97c45cd38c7775e7b799f899cc2a11c691f5310d1a840edce7a959e8",
+            "entryCount": 0
+          },
+          {
+            "sourcePath": "app/layouts/NavigationLinks.tsx",
+            "sourceFingerprint": "sha256:bff7aa01e822b4c2893ebc8ee1bc6f7556980fad3c2411d5f09af58571eb36fb",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "app/router/RouteErrorBoundary.tsx",
+            "sourceFingerprint": "sha256:4e36d8fe80629a36b31eb3bc9e9874418f21866adb78c3a7b185585fbc064e9b",
+            "entryCount": 2
+          },
+          {
+            "sourcePath": "pages/catalog-page/CourseCard.tsx",
+            "sourceFingerprint": "sha256:5775e56120032f60de6401d682184dcfdd45074b632b59f6dbdae8275e7a0301",
+            "entryCount": 2
+          },
+          {
+            "sourcePath": "pages/catalog-page/SortControl.tsx",
+            "sourceFingerprint": "sha256:c6683ce06d79435e083eb8c3385fa2831758e9b338e4ee48e6eb7d82e4ee1344",
+            "entryCount": 1
+          },
+          {
+            "sourcePath": "pages/course-detail-page/CourseDetailPage.tsx",
+            "sourceFingerprint": "sha256:706555801f37d0556d410cde32d4e20b23bad81457f0ca539ec4363460ce5199",
+            "entryCount": 4
+          },
+          {
+            "sourcePath": "widgets/course-chat/CourseChatPanel.tsx",
+            "sourceFingerprint": "sha256:953cdec9c22c18c098598abd6314bbf2727d4dee908c46f405bb943ca5622dfa",
+            "entryCount": 3
+          },
+          {
+            "sourcePath": "widgets/enrollment-progress-panel/EnrollmentProgressPanel.tsx",
+            "sourceFingerprint": "sha256:6a06386dfffa702eba85c44e4f2297f83fd350264f947ef7721430c889aa5eaf",
+            "entryCount": 1
           }
         ]
       }

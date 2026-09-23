@@ -28,6 +28,7 @@ const CURRENT_CORPUS_OCCURRENCE_COUNT = 808;
 
 const {
   SUPPLIED_REVIEW_ARTIFACT,
+  consumerReconciliationRequestDigest,
   protectedSourceFingerprint,
   semanticIdentityDigest,
   applyProtectedSourceRevision,
@@ -345,6 +346,43 @@ function fixtureConsumerSourceFingerprint(sourcePath: string, source: string): s
     .digest('hex')}`;
 }
 
+function additionRequest() {
+  return {
+    taskId: 'FE-072',
+    sources: [
+      {
+        sourcePath: 'pages/instructor-course-editor-page/CourseLessonsSection.tsx',
+        expectedSourceFingerprint: `sha256:${'1'.repeat(64)}`,
+      },
+      {
+        sourcePath: 'pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx',
+        expectedSourceFingerprint: `sha256:${'2'.repeat(64)}`,
+      },
+    ],
+    obsolete: [],
+    additions: [
+      {
+        familyId: 'lesson-upload-descriptions',
+        unitIds: ['MLUX-C0259', 'MLUX-C0260'],
+        consumers: [
+          {
+            sourcePath: 'pages/instructor-course-editor-page/CourseLessonsSection.tsx',
+            functionName: 'CourseLessonsSection',
+            argument: 'uploadRule.descriptionKey',
+            occurrence: 1,
+          },
+          {
+            sourcePath: 'pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx',
+            functionName: 'InstructorLessonEditorPage',
+            argument: 'rule.descriptionKey',
+            occurrence: 1,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function fixture() {
   const unit = {
     id: 'MLUX-C0001',
@@ -507,6 +545,57 @@ function restoredFixture(multiRevision = false) {
 }
 
 describe('canonical localization corpus engine', () => {
+  it('binds replacement reconciliation digests to one closed, ordered request shape', () => {
+    const request = {
+      taskId: 'FE-073',
+      sources: [
+        {
+          sourcePath: 'app/layouts/AppShell.tsx',
+          expectedSourceFingerprint: `sha256:${'1'.repeat(64)}`,
+        },
+        {
+          sourcePath: 'app/layouts/NavigationLinks.tsx',
+          expectedSourceFingerprint: `sha256:${'2'.repeat(64)}`,
+        },
+      ],
+      replacements: [
+        {
+          familyId: 'navigation-labels',
+          oldConsumer: {
+            sourcePath: 'app/layouts/AppShell.tsx',
+            functionName: 'NavigationLinks',
+            argument: 'item.labelKey',
+            occurrence: 1,
+          },
+          newConsumer: {
+            sourcePath: 'app/layouts/NavigationLinks.tsx',
+            functionName: 'NavigationLinks',
+            argument: 'item.labelKey',
+            occurrence: 1,
+          },
+        },
+      ],
+      obsolete: [],
+    };
+    const orderedDigest = consumerReconciliationRequestDigest(request);
+    expect(orderedDigest).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(consumerReconciliationRequestDigest(structuredClone(request))).toBe(orderedDigest);
+    expect(
+      consumerReconciliationRequestDigest({ ...request, sources: [...request.sources].reverse() }),
+    ).not.toBe(orderedDigest);
+
+    const malformed = structuredClone(request);
+    delete (malformed.replacements[0].newConsumer as { occurrence?: number }).occurrence;
+    expect(() => consumerReconciliationRequestDigest(malformed)).toThrow(
+      'consumer reconciliation request is invalid',
+    );
+    const duplicate = structuredClone(request);
+    duplicate.replacements.push(structuredClone(duplicate.replacements[0]));
+    expect(() => consumerReconciliationRequestDigest(duplicate)).toThrow(
+      'consumer reconciliation request is invalid',
+    );
+  });
+
   it('keeps the exported corpus contract aligned with required runtime shapes', () => {
     const pluralForms: LocalizationPluralForms = {
       en: { one: 'one', other: 'other' },
@@ -760,6 +849,61 @@ describe('canonical localization corpus engine', () => {
       missingChangesStaleRevision,
       missingApprovedStaleRevision,
     ]).toHaveLength(4);
+  });
+
+  it('accepts only exact, distinct FE-072 upload-help addition request identities', () => {
+    const valid = additionRequest();
+    expect(consumerReconciliationRequestDigest(valid)).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+    const invalidRequests = [
+      { ...valid, unexpected: true },
+      {
+        ...valid,
+        additions: [{ ...valid.additions[0], familyId: '', unitIds: [] }],
+      },
+      { ...valid, additions: [valid.additions[0], structuredClone(valid.additions[0])] },
+      {
+        ...valid,
+        additions: [{ ...valid.additions[0], unitIds: ['MLUX-C0259', 'MLUX-C0259'] }],
+      },
+      {
+        ...valid,
+        additions: [
+          {
+            ...valid.additions[0],
+            consumers: [valid.additions[0].consumers[0], valid.additions[0].consumers[0]],
+          },
+        ],
+      },
+      {
+        ...valid,
+        additions: [
+          {
+            ...valid.additions[0],
+            consumers: [{ ...valid.additions[0].consumers[0], occurrence: 0 }],
+          },
+        ],
+      },
+      {
+        ...valid,
+        additions: [
+          {
+            ...valid.additions[0],
+            consumers: [
+              {
+                ...valid.additions[0].consumers[0],
+                sourcePath: 'pages/unadmitted/Consumer.tsx',
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    for (const request of invalidRequests)
+      expect(() => consumerReconciliationRequestDigest(request)).toThrow(
+        'consumer reconciliation request is invalid',
+      );
   });
 
   it('pins validation and generation to the engine-owned DRAFT-37 corpus version', () => {
@@ -2685,7 +2829,7 @@ describe('canonical localization corpus engine', () => {
 
     await expect(retiredConsumerViolations(corpus, 'src')).resolves.toEqual(
       expect.arrayContaining([
-        `${id}: retired unit has source consumer InstructorCourseEditorPage.tsx`,
+        `${id}: retired unit has source consumer DestructiveCourseEditorSection.tsx`,
       ]),
     );
     expect(unit).toMatchObject({ namespace: 'instructor', key });
@@ -3630,13 +3774,13 @@ describe('canonical localization corpus engine', () => {
     expect(await retiredConsumerViolations(corpus, 'src')).toEqual([]);
     expect(performance.now() - activeStartedAt).toBeLessThan(10_000);
     expect(corpus.consumerGrammar.version).toBe(1);
-    expect(corpus.consumerGrammar.translatorWrappers).toHaveLength(14);
+    expect(corpus.consumerGrammar.translatorWrappers).toHaveLength(12);
     expect(corpus.consumerGrammar.translatorForwarders).toHaveLength(2);
     expect(corpus.consumerGrammar.translatorDependencies).toHaveLength(1);
-    expect(corpus.consumerGrammar.dynamicKeyFamilies).toHaveLength(23);
+    expect(corpus.consumerGrammar.dynamicKeyFamilies).toHaveLength(24);
     expect(
       corpus.consumerGrammar.dynamicKeyFamilies.flatMap((family) => family.consumers),
-    ).toHaveLength(48);
+    ).toHaveLength(49);
     for (const unit of corpus.units) {
       unit.unitLifecycle = 'retired';
       unit.occurrences = [];

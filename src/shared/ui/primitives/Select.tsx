@@ -26,11 +26,10 @@ interface SelectOption {
 
 type NativeOptionElement = ReactElement<OptionHTMLAttributes<HTMLOptionElement>>;
 
-export interface SelectProps
-  extends Omit<
-    ButtonHTMLAttributes<HTMLButtonElement>,
-    'children' | 'defaultValue' | 'onChange' | 'value'
-  > {
+export interface SelectProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'children' | 'defaultValue' | 'onChange' | 'value'
+> {
   label: ReactNode;
   helpText?: ReactNode;
   error?: ReactNode;
@@ -282,9 +281,8 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                onPointerDown={(event) => {
-                  if (event.button > 0) return;
-                  event.preventDefault();
+                onClick={(event) => {
+                  if (event.button !== 0) return;
                   select(index);
                 }}
               >

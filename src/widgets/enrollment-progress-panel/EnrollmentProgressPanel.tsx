@@ -24,11 +24,13 @@ export interface EnrollmentProgressPanelProps {
   readonly onRetry: () => void;
 }
 
+type LessonCompletionSetter = (lessonId: number, completed: boolean) => void;
+
 function setLessonCompletion(
   pending: boolean,
   lessonId: number,
   completed: boolean,
-  onSetCompletion: EnrollmentProgressPanelProps['onSetCompletion'],
+  onSetCompletion: LessonCompletionSetter,
 ) {
   if (pending) return;
   onSetCompletion(lessonId, completed);
@@ -52,7 +54,7 @@ interface LessonCompletionActionProps {
   readonly lessonId: number;
   readonly markComplete: boolean;
   readonly pending: boolean;
-  readonly onSetCompletion: EnrollmentProgressPanelProps['onSetCompletion'];
+  readonly onSetCompletion: LessonCompletionSetter;
 }
 
 function LessonCompletionAction({
