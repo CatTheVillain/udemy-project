@@ -7,9 +7,12 @@ import type { ExclusiveDisclosureControl } from '@shared/types';
 
 import styles from './SortControl.module.css';
 
-const SORT_LABEL: Readonly<
-  Record<CatalogSort, { readonly key: string; readonly defaultValue: string }>
-> = {
+interface SortLabel {
+  readonly key: string;
+  readonly defaultValue: string;
+}
+
+const SORT_LABEL: Readonly<Record<CatalogSort, SortLabel>> = {
   created_at: { key: 'catalog:oldest', defaultValue: 'Oldest' },
   '-created_at': { key: 'catalog:newest', defaultValue: 'Newest' },
   price: { key: 'catalog:lowToHigh', defaultValue: 'Low to High' },

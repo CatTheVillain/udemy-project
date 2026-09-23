@@ -25,20 +25,42 @@ import {
 import {
   createBrowserAccessTokenStore,
   createExceptionSafeAccessTokenStore,
+  isAccessTokenStorageEvent,
   type AccessTokenStore,
 } from './storage';
 
 export type { SessionCacheEpoch } from '@shared/api';
 
+interface BootstrappingSessionState {
+  readonly status: 'bootstrapping';
+}
+interface AnonymousSessionState {
+  readonly status: 'anonymous';
+}
+interface AuthenticatedSessionState {
+  readonly status: 'authenticated';
+  readonly user: UserProfile;
+}
+interface SessionErrorState {
+  readonly status: 'error';
+}
+
 export type SessionState =
-  | { status: 'bootstrapping' }
-  | { status: 'anonymous' }
-  | { status: 'authenticated'; user: UserProfile }
-  | { status: 'error' };
+  BootstrappingSessionState | AnonymousSessionState | AuthenticatedSessionState | SessionErrorState;
+
+declare const sessionIdentityBrand: unique symbol;
+
+/**
+ * Opaque in-memory owner for work that must not continue under a replaced token.
+ * It intentionally contains neither the token nor profile data.
+ */
+export type SessionIdentity = string & { readonly [sessionIdentityBrand]: 'SessionIdentity' };
 
 export interface SessionContextValue {
   state: SessionState;
   cacheEpoch?: SessionCacheEpoch | null;
+  captureSessionIdentity?(): SessionIdentity;
+  isSessionIdentityCurrent?(identity: SessionIdentity): boolean;
   retryBootstrap(): void;
   acceptAccessToken(token: string): void;
   clearSession(): void;
@@ -53,6 +75,13 @@ export interface SessionContextValue {
   ): Promise<TResponse>;
 }
 
+interface SessionIdentityOwner {
+  captureSessionIdentity(): SessionIdentity;
+  isSessionIdentityCurrent(identity: SessionIdentity): boolean;
+}
+
+type SessionProviderContextValue = SessionContextValue & SessionIdentityOwner;
+
 interface SessionProviderProps {
   children: ReactNode;
   client?: ApiClient;
@@ -61,13 +90,17 @@ interface SessionProviderProps {
   fetchImplementation?: typeof fetch;
 }
 
-const SessionContext = createContext<SessionContextValue | null>(null);
+const SessionContext = createContext<SessionProviderContextValue | null>(null);
 SessionContext.displayName = 'SessionContext';
 let sessionCacheEpochSequence = 0;
 
 function createSessionCacheEpoch(): SessionCacheEpoch {
   sessionCacheEpochSequence += 1;
   return `session-cache-${sessionCacheEpochSequence}` as SessionCacheEpoch;
+}
+
+function createSessionIdentity(generation: number): SessionIdentity {
+  return `session-identity-${generation}` as SessionIdentity;
 }
 
 function forSessionGeneration<TBody, TResponse>(
@@ -88,49 +121,83 @@ export function SessionProvider({
   apiBaseUrl = '',
   fetchImplementation,
 }: SessionProviderProps) {
+  const browserTokenStoreRef = useRef<AccessTokenStore | null>(null);
+  if (!suppliedTokenStore && !browserTokenStoreRef.current) {
+    browserTokenStoreRef.current = createBrowserAccessTokenStore();
+  }
+  const sourceTokenStore = suppliedTokenStore ?? browserTokenStoreRef.current;
   const tokenStore = useMemo(
-    () =>
-      createExceptionSafeAccessTokenStore(suppliedTokenStore ?? createBrowserAccessTokenStore()),
-    [suppliedTokenStore],
+    () => createExceptionSafeAccessTokenStore(sourceTokenStore as AccessTokenStore),
+    [sourceTokenStore],
   );
   const [state, setState] = useState<SessionState>({ status: 'bootstrapping' });
   const [cacheEpoch, setCacheEpoch] = useState<SessionCacheEpoch | null>(null);
   const [bootstrapSequence, setBootstrapSequence] = useState(0);
   const mountedRef = useRef(true);
   const generationRef = useRef(0);
+  const sessionIdentityRef = useRef<SessionIdentity>(createSessionIdentity(generationRef.current));
+  const sessionTokenRef = useRef<string | null>(tokenStore.get());
 
-  const clearSession = useCallback(() => {
+  const transitionToToken = useCallback((token: string | null) => {
     generationRef.current += 1;
-    tokenStore.clear();
-    if (mountedRef.current) {
-      setCacheEpoch(null);
-      setState({ status: 'anonymous' });
+    if (sessionTokenRef.current !== token) {
+      sessionTokenRef.current = token;
+      sessionIdentityRef.current = createSessionIdentity(generationRef.current);
     }
-  }, [tokenStore]);
+    if (!mountedRef.current) return;
+
+    setCacheEpoch(null);
+    if (!token) {
+      setState({ status: 'anonymous' });
+      return;
+    }
+
+    setState({ status: 'bootstrapping' });
+    setBootstrapSequence((sequence) => sequence + 1);
+  }, []);
+
+  const captureSessionIdentity = useCallback(() => sessionIdentityRef.current, []);
+
+  const isSessionIdentityCurrent = useCallback(
+    (identity: SessionIdentity) =>
+      sessionIdentityRef.current === identity && tokenStore.get() === sessionTokenRef.current,
+    [tokenStore],
+  );
 
   const isCurrentSnapshot = useCallback(
-    (generation: number, _token: string | null) =>
-      mountedRef.current && generationRef.current === generation,
-    [],
+    (generation: number, token: string | null) =>
+      mountedRef.current && generationRef.current === generation && tokenStore.get() === token,
+    [tokenStore],
   );
+
+  const reconcileReplacedToken = useCallback(
+    (generation: number, token: string | null) => {
+      if (
+        !mountedRef.current ||
+        generationRef.current !== generation ||
+        tokenStore.get() === token
+      ) {
+        return false;
+      }
+      transitionToToken(tokenStore.get());
+      return true;
+    },
+    [tokenStore, transitionToToken],
+  );
+
+  const clearSession = useCallback(() => {
+    tokenStore.clear();
+    transitionToToken(null);
+  }, [tokenStore, transitionToToken]);
 
   const clearSessionForSnapshot = useCallback(
     (generation: number, token: string | null) => {
       if (!isCurrentSnapshot(generation, token)) return false;
-      const currentToken = tokenStore.get();
-      if (currentToken !== token) {
-        generationRef.current += 1;
-        setCacheEpoch(null);
-        setState({ status: 'anonymous' });
-        return false;
-      }
-      generationRef.current += 1;
       tokenStore.clear();
-      setCacheEpoch(null);
-      setState({ status: 'anonymous' });
+      transitionToToken(null);
       return true;
     },
-    [isCurrentSnapshot, tokenStore],
+    [isCurrentSnapshot, tokenStore, transitionToToken],
   );
 
   const ownedClient = useMemo(
@@ -139,6 +206,9 @@ export function SessionProvider({
         baseUrl: apiBaseUrl,
         fetch: fetchImplementation,
         getAccessToken: () => tokenStore.get(),
+        getRequestIdentity: () => String(generationRef.current),
+        isRequestIdentityCurrent: (identity) =>
+          mountedRef.current && String(generationRef.current) === identity,
       }),
     [apiBaseUrl, fetchImplementation, tokenStore],
   );
@@ -167,23 +237,22 @@ export function SessionProvider({
           generation,
         ),
       );
-      if (isCurrentSnapshot(generation, token) && tokenStore.get() === token) {
+      if (isCurrentSnapshot(generation, token)) {
         setCacheEpoch(createSessionCacheEpoch());
         setState({ status: 'authenticated', user: mapUserProfileDto(profile) });
-      } else if (isCurrentSnapshot(generation, token)) {
-        generationRef.current += 1;
-        setCacheEpoch(null);
-        setState({ status: 'anonymous' });
-      }
+      } else reconcileReplacedToken(generation, token);
     } catch (error) {
-      if (!isCurrentSnapshot(generation, token)) return;
+      if (!isCurrentSnapshot(generation, token)) {
+        reconcileReplacedToken(generation, token);
+        return;
+      }
       if (error instanceof ApiError && error.status === 401) {
         clearSessionForSnapshot(generation, token);
       } else {
         setState({ status: 'error' });
       }
     }
-  }, [clearSessionForSnapshot, client, isCurrentSnapshot, tokenStore]);
+  }, [clearSessionForSnapshot, client, isCurrentSnapshot, reconcileReplacedToken, tokenStore]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -193,32 +262,29 @@ export function SessionProvider({
     };
   }, [bootstrap, bootstrapSequence]);
 
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (!isAccessTokenStorageEvent(event)) return;
+      transitionToToken(tokenStore.get());
+    };
+
+    globalThis.addEventListener?.('storage', handleStorageChange);
+    return () => globalThis.removeEventListener?.('storage', handleStorageChange);
+  }, [tokenStore, transitionToToken]);
+
   const retryBootstrap = useCallback(() => {
-    generationRef.current += 1;
-    if (mountedRef.current) {
-      setCacheEpoch(null);
-      setState({ status: 'bootstrapping' });
-    }
-    setBootstrapSequence((sequence) => sequence + 1);
-  }, []);
+    transitionToToken(tokenStore.get());
+  }, [tokenStore, transitionToToken]);
 
   const acceptAccessToken = useCallback(
     (token: string) => {
-      generationRef.current += 1;
       if (!tokenStore.set(token)) {
-        if (mountedRef.current) {
-          setCacheEpoch(null);
-          setState({ status: 'anonymous' });
-        }
+        transitionToToken(null);
         return;
       }
-      if (mountedRef.current) {
-        setCacheEpoch(null);
-        setState({ status: 'bootstrapping' });
-      }
-      setBootstrapSequence((sequence) => sequence + 1);
+      transitionToToken(tokenStore.get());
     },
-    [tokenStore],
+    [tokenStore, transitionToToken],
   );
 
   const requestRequired = useCallback(
@@ -228,9 +294,18 @@ export function SessionProvider({
       const generation = generationRef.current;
       const token = tokenStore.get();
       try {
-        return await client.request<TResponse, TBody>(
+        const response = await client.request<TResponse, TBody>(
           forSessionGeneration({ ...options, authPolicy: 'required' }, generation),
         );
+        if (!isCurrentSnapshot(generation, token)) {
+          reconcileReplacedToken(generation, token);
+          throw new ApiError({
+            kind: 'aborted',
+            status: null,
+            message: 'Request belongs to a replaced session',
+          });
+        }
+        return response;
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           clearSessionForSnapshot(generation, token);
@@ -238,7 +313,7 @@ export function SessionProvider({
         throw error;
       }
     },
-    [clearSessionForSnapshot, client, tokenStore],
+    [clearSessionForSnapshot, client, isCurrentSnapshot, reconcileReplacedToken, tokenStore],
   );
 
   const requestOptional = useCallback(
@@ -248,9 +323,18 @@ export function SessionProvider({
       const generation = generationRef.current;
       const token = tokenStore.get();
       try {
-        return await client.request<TResponse, TBody>(
+        const response = await client.request<TResponse, TBody>(
           forSessionGeneration({ ...options, authPolicy: 'optional' }, generation),
         );
+        if (!isCurrentSnapshot(generation, token)) {
+          reconcileReplacedToken(generation, token);
+          throw new ApiError({
+            kind: 'aborted',
+            status: null,
+            message: 'Request belongs to a replaced session',
+          });
+        }
+        return response;
       } catch (error) {
         if (!(error instanceof ApiError) || error.status !== 401 || !token) {
           throw error;
@@ -261,7 +345,7 @@ export function SessionProvider({
         );
       }
     },
-    [clearSessionForSnapshot, client, tokenStore],
+    [clearSessionForSnapshot, client, isCurrentSnapshot, reconcileReplacedToken, tokenStore],
   );
 
   const requestPublic = useCallback(
@@ -271,10 +355,12 @@ export function SessionProvider({
     [client],
   );
 
-  const value = useMemo<SessionContextValue>(
+  const value = useMemo<SessionProviderContextValue>(
     () => ({
       state,
       cacheEpoch,
+      captureSessionIdentity,
+      isSessionIdentityCurrent,
       retryBootstrap,
       acceptAccessToken,
       clearSession,
@@ -285,7 +371,9 @@ export function SessionProvider({
     [
       acceptAccessToken,
       cacheEpoch,
+      captureSessionIdentity,
       clearSession,
+      isSessionIdentityCurrent,
       requestOptional,
       requestPublic,
       requestRequired,

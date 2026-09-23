@@ -1,19 +1,19 @@
 import { API_OPERATION_BY_ID } from '@entities/api';
 import { decodeCourseListDto, mapCourseListDto, type CatalogCourseList } from '@entities/course';
-import { ApiError, type ApiClient } from '@shared/api';
+import { ApiError, type ApiRequestOptions } from '@shared/api';
 
 import { serializeCatalogQuery, toCourseListQuery, type CatalogQuery } from './query';
 
-export type CatalogRequester = ApiClient['request'];
+export interface CatalogRequester {
+  <TResponse, TBody = unknown>(
+    options: ApiRequestOptions<TBody, NoInfer<TResponse>>,
+  ): Promise<TResponse>;
+}
 export type CatalogFailureKind = 'offline' | 'invalid_response' | 'request';
 export type CatalogFailureTitleKey =
-  | 'common:youAppearOffline'
-  | 'catalog:catalogDataUnavailable'
-  | 'catalog:catalogLoadFailed';
+  'common:youAppearOffline' | 'catalog:catalogDataUnavailable' | 'catalog:catalogLoadFailed';
 export type CatalogFailureMessageKey =
-  | 'common:checkConnectionAndTryAgain'
-  | 'catalog:tryAgainShortly'
-  | 'common:pleaseTryAgain';
+  'common:checkConnectionAndTryAgain' | 'catalog:tryAgainShortly' | 'common:pleaseTryAgain';
 
 export interface CatalogFailure {
   kind: CatalogFailureKind;

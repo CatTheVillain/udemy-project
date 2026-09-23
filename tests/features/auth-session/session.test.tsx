@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { useState } from 'react';
+import { QueryClient } from '@tanstack/react-query';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,14 @@ import {
   type AccessTokenStore,
 } from '../../../src/features/auth-session';
 import type { UserProfileDto } from '../../../src/entities/user';
+import { cancelAndRemovePrivateQueries } from '../../../src/app/query/SessionPrivateCacheLifecycle';
+import {
+  instructorCourseCollectionQueryKey,
+  instructorCourseQueryKey,
+  instructorCourseRosterQueryKey,
+  instructorLessonQueryKey,
+  type SessionCacheEpoch,
+} from '../../../src/shared/api/query-keys';
 
 const profile: UserProfileDto = {
   email: 'learner@example.com',
@@ -387,6 +396,76 @@ describe('SessionProvider', () => {
   });
 });
 
+describe('session-scoped private query cleanup', () => {
+  it('cancels and removes every canonical instructor family while retaining public cache data', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const epoch = 'instructor-session-a' as SessionCacheEpoch;
+    const privateKeys = [
+      instructorCourseQueryKey(epoch, 7),
+      instructorLessonQueryKey(epoch, 8),
+      instructorCourseCollectionQueryKey(epoch, 1),
+      instructorCourseRosterQueryKey(epoch, 7, 1),
+    ];
+    const publicKey = ['catalog', 'courses', 1] as const;
+    const cancellations: AbortSignal[] = [];
+
+    for (const key of privateKeys) {
+      void queryClient
+        .fetchQuery({
+          queryKey: key,
+          queryFn: ({ signal }) => {
+            cancellations.push(signal);
+            return new Promise<never>(() => undefined);
+          },
+        })
+        .catch(() => undefined);
+    }
+    queryClient.setQueryData(publicKey, { title: 'Public course remains' });
+    await waitFor(() => expect(cancellations).toHaveLength(4));
+
+    await cancelAndRemovePrivateQueries(queryClient, epoch);
+
+    expect(cancellations.every((signal) => signal.aborted)).toBe(true);
+    expect(privateKeys.map((key) => queryClient.getQueryData(key))).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(queryClient.getQueryData(publicKey)).toEqual({ title: 'Public course remains' });
+    queryClient.clear();
+  });
+
+  it('does not restore late old-session data after lifecycle cleanup', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const epoch = 'instructor-session-old' as SessionCacheEpoch;
+    const privateKey = instructorCourseQueryKey(epoch, 7);
+    const late = deferred<{ title: string }>();
+    const request = queryClient.fetchQuery({
+      queryKey: privateKey,
+      queryFn: () => late.promise,
+    });
+    queryClient.setQueryData(['catalog', 'courses', 1], { title: 'Public course remains' });
+    await waitFor(() =>
+      expect(queryClient.getQueryState(privateKey)?.fetchStatus).toBe('fetching'),
+    );
+
+    await cancelAndRemovePrivateQueries(queryClient, epoch);
+    late.resolve({ title: 'Old instructor course' });
+    await request.catch(() => undefined);
+
+    expect(queryClient.getQueryData(privateKey)).toBeUndefined();
+    expect(queryClient.getQueryData(['catalog', 'courses', 1])).toEqual({
+      title: 'Public course remains',
+    });
+    queryClient.clear();
+  });
+});
+
 function RequestHarness({ mode }: { mode: 'required' | 'optional' }) {
   const { acceptAccessToken, requestOptional, requestRequired, state } = useSession();
   const [result, setResult] = useState('idle');
@@ -538,7 +617,7 @@ describe('session-aware requests', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
-      'old-session',
+      'failed',
     );
   });
 

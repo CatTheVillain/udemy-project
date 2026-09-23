@@ -1,4 +1,4 @@
-import { matchPath } from 'react-router-dom';
+import { matchRoutes } from 'react-router-dom';
 
 import type { UserRole } from '../../entities/user';
 import type { DensityMode } from '../../shared/ui/theme';
@@ -19,6 +19,24 @@ export type PageId =
   | 'PAGE-013'
   | 'PAGE-014'
   | 'PAGE-015';
+
+const PAGE_IDS = [
+  'PAGE-001',
+  'PAGE-002',
+  'PAGE-003',
+  'PAGE-004',
+  'PAGE-005',
+  'PAGE-006',
+  'PAGE-007',
+  'PAGE-008',
+  'PAGE-009',
+  'PAGE-010',
+  'PAGE-011',
+  'PAGE-012',
+  'PAGE-013',
+  'PAGE-014',
+  'PAGE-015',
+] as const satisfies readonly PageId[];
 
 export type RouteAccess = 'public' | 'guest' | Extract<UserRole, 'student' | 'instructor'>;
 export type RouteLayout = 'public' | 'auth' | 'workspace';
@@ -172,12 +190,27 @@ export const APP_ROUTES = [
   },
 ] as const satisfies readonly AppRouteDefinition[];
 
-export const APP_ROUTE_BY_ID = Object.freeze(
-  Object.fromEntries(APP_ROUTES.map((route) => [route.id, route])),
-) as Readonly<Record<PageId, (typeof APP_ROUTES)[number]>>;
+export function hasEveryRouteId(
+  routeById: Partial<Record<PageId, AppRouteDefinition>>,
+): routeById is Record<PageId, AppRouteDefinition> {
+  return PAGE_IDS.every((pageId) => routeById[pageId] !== undefined);
+}
+
+const mutableRouteById = APP_ROUTES.reduce<Partial<Record<PageId, AppRouteDefinition>>>(
+  (routeById, route) => {
+    routeById[route.id] = route;
+    return routeById;
+  },
+  {},
+);
+
+if (!hasEveryRouteId(mutableRouteById)) throw new Error('Route ID registry is incomplete.');
+
+export const APP_ROUTE_BY_ID = Object.freeze(mutableRouteById);
 
 export function routeForPath(pathname: string): AppRouteDefinition | undefined {
-  return APP_ROUTES.find((route) => matchPath({ path: route.path, end: true }, pathname));
+  // Keep metadata lookup aligned with the rendered router's ranking and path-decoding semantics.
+  return matchRoutes([...APP_ROUTES], pathname)?.[0]?.route;
 }
 
 export function densityForPath(pathname: string): DensityMode {

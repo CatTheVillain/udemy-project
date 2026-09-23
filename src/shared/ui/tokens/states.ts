@@ -12,32 +12,22 @@
 // Component state type
 // ---------------------------------------------------------------------------
 export type ComponentState =
-  | 'initial'
-  | 'loading'
-  | 'empty'
-  | 'success'
-  | 'error'
-  | 'disabled'
-  | 'focus'
-  | 'selected';
+  'initial' | 'loading' | 'empty' | 'success' | 'error' | 'disabled' | 'focus' | 'selected';
+
+export interface StateTokenDefinition {
+  /** Background color CSS variable */
+  readonly bg: string;
+  /** Foreground/text color CSS variable */
+  readonly fg: string;
+  /** Border color CSS variable */
+  readonly border: string;
+}
 
 // ---------------------------------------------------------------------------
 // State token map — maps each state to its semantic CSS variable names
 // These CSS variable names are defined in tokens.css.
 // ---------------------------------------------------------------------------
-export const stateTokenMap: Readonly<
-  Record<
-    ComponentState,
-    Readonly<{
-      /** Background color CSS variable */
-      bg: string;
-      /** Foreground/text color CSS variable */
-      fg: string;
-      /** Border color CSS variable */
-      border: string;
-    }>
-  >
-> = {
+export const stateTokenMap: Readonly<Record<ComponentState, StateTokenDefinition>> = {
   initial: {
     bg: 'var(--color-surface)',
     fg: 'var(--text-primary)',

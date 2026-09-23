@@ -208,16 +208,19 @@ test('opens a published Catalog course through a successful Course Detail respon
 
   const catalogOrigin = '/?search_query=React&min_price=5&max_price=10&sort=-price&page=3#results';
   const waitForPageThreeCatalogResponse = () =>
-    page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        response.request().method() === 'GET' &&
-        url.pathname === '/courses' &&
-        url.search ===
-          '?page=3&page_size=24&search_query=React&min_price=5&max_price=10&sort=-price' &&
-        response.status() === 200
-      );
-    });
+    page.waitForResponse(
+      (response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === 'GET' &&
+          url.pathname === '/courses' &&
+          url.search ===
+            '?page=3&page_size=24&search_query=React&min_price=5&max_price=10&sort=-price' &&
+          response.status() === 200
+        );
+      },
+      { timeout: 15_000 },
+    );
   const courseLink = page.getByRole('link', { name: course.title });
   const pageThreeCancellation: RequestFailureIdentity = {
     method: 'GET',

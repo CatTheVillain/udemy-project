@@ -16,8 +16,7 @@ export type LessonProgressFeedbackTone = 'info' | 'success' | 'error';
 export type LessonProgressFeedbackVisibility = 'visible' | 'exiting';
 
 export type LessonProgressFeedbackMessageKey =
-  | 'learning:lessonUpdateUnconfirmed'
-  | 'learning:lessonProgressUpdateFailed';
+  'learning:lessonUpdateUnconfirmed' | 'learning:lessonProgressUpdateFailed';
 
 interface LessonProgressFeedbackBase {
   readonly tone: LessonProgressFeedbackTone;
@@ -37,8 +36,7 @@ export interface PersistentLessonProgressFeedback extends LessonProgressFeedback
 }
 
 export type LessonProgressFeedback =
-  | PersistentLessonProgressFeedback
-  | TransientLessonProgressFeedback;
+  PersistentLessonProgressFeedback | TransientLessonProgressFeedback;
 
 export interface LearningFeedbackMotionPreferences {
   readonly reducedMotion: boolean;
@@ -48,7 +46,15 @@ export const DEFAULT_LEARNING_FEEDBACK_MOTION_PREFERENCES: LearningFeedbackMotio
   reducedMotion: false,
 };
 
-export type LessonCompletionState = { status: 'unknown' } | { status: 'known'; completed: boolean };
+interface UnknownLessonCompletionState {
+  readonly status: 'unknown';
+}
+interface KnownLessonCompletionState {
+  readonly status: 'known';
+  readonly completed: boolean;
+}
+
+export type LessonCompletionState = UnknownLessonCompletionState | KnownLessonCompletionState;
 
 export interface LessonProgressAttempt {
   subject: SessionCacheEpoch;

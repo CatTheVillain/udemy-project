@@ -57,10 +57,36 @@ const CONSUMER_FAMILY_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const CONSUMER_SOURCE_FINGERPRINT = /^sha256:[0-9a-f]{64}$/;
 const REACT_DEPENDENCY_HOOKS = new Set(['useCallback', 'useEffect', 'useLayoutEffect', 'useMemo']);
 const CONSUMER_SOURCE_FINGERPRINT_VERSION = 'localization-consumer-source-v1';
-const CONSUMER_RECONCILIATION_REQUEST_KEYS = ['obsolete', 'sources', 'taskId'];
+const CONSUMER_RECONCILIATION_REQUEST_KEYS = [
+  ['additions', 'obsolete', 'sources', 'taskId'],
+  ['obsolete', 'replacements', 'sources', 'taskId'],
+  ['obsolete', 'sources', 'taskId'],
+];
 const CONSUMER_RECONCILIATION_SOURCE_KEYS = ['expectedSourceFingerprint', 'sourcePath'];
+const CONSUMER_RECONCILIATION_ADDITION_KEYS = ['consumers', 'familyId', 'unitIds'];
+const CONSUMER_RECONCILIATION_ADDITION_CONSUMER_KEYS = [
+  'argument',
+  'functionName',
+  'occurrence',
+  'sourcePath',
+];
+const CONSUMER_RECONCILIATION_REPLACEMENT_KEYS = ['familyId', 'newConsumer', 'oldConsumer'];
+const CONSUMER_RECONCILIATION_REPLACEMENT_CONSUMER_KEYS = [
+  'argument',
+  'functionName',
+  'occurrence',
+  'sourcePath',
+];
 const CONSUMER_RECONCILIATION_OBSOLETE_KEYS = ['bindingName', 'functionName', 'kind', 'sourcePath'];
 const CONSUMER_RECONCILIATION_DYNAMIC_OBSOLETE_KEYS = [
+  'argument',
+  'familyId',
+  'functionName',
+  'kind',
+  'occurrence',
+  'sourcePath',
+];
+const LEGACY_CONSUMER_RECONCILIATION_DYNAMIC_OBSOLETE_KEYS = [
   'bindingName',
   'familyId',
   'functionName',
@@ -732,27 +758,25 @@ function lifecycleViolation(
       isReviewRequest &&
       !validReviewRequest(event.reviewRequest, readCompatibilityUnit?.id, readCompatibilityLocale)
     ) {
-      if (
-        !(
-          isReadCompatibleLegacyReviewRequest(
-            readCompatibilityUnit,
-            readCompatibilityLocale,
-            candidate,
-            event,
-            index,
-          ) ||
-          isReadCompatibleSuppliedArtifactImport(
-            readCompatibilityUnit,
-            candidate,
-            event,
-            index,
-            readCompatibilitySuppliedArtifactSourceIdentity,
-          ) ||
-          (allowSuppliedArtifactImport &&
-            validSuppliedArtifactImport(event.suppliedArtifactImport) &&
-            hasExactKeys(event, SUPPLIED_ARTIFACT_IMPORT_HISTORY_KEYS))
-        )
-      )
+      if (!(
+        isReadCompatibleLegacyReviewRequest(
+          readCompatibilityUnit,
+          readCompatibilityLocale,
+          candidate,
+          event,
+          index,
+        ) ||
+        isReadCompatibleSuppliedArtifactImport(
+          readCompatibilityUnit,
+          candidate,
+          event,
+          index,
+          readCompatibilitySuppliedArtifactSourceIdentity,
+        ) ||
+        (allowSuppliedArtifactImport &&
+          validSuppliedArtifactImport(event.suppliedArtifactImport) &&
+          hasExactKeys(event, SUPPLIED_ARTIFACT_IMPORT_HISTORY_KEYS))
+      ))
         return 'review-request history lacks an exact request boundary';
     }
     if (!isReviewRequest && event.reviewRequest !== undefined)
@@ -1198,10 +1222,12 @@ function validateConsumerBoundary(boundary, kind, identities, violations) {
 
 function validConsumerReconciliationRequest(request) {
   if (
-    !hasExactKeys(request, CONSUMER_RECONCILIATION_REQUEST_KEYS) ||
+    !CONSUMER_RECONCILIATION_REQUEST_KEYS.some((keys) => hasExactKeys(request, keys)) ||
     !POST_MIGRATION_OWNER_TASK.test(request.taskId) ||
     !Array.isArray(request.sources) ||
     request.sources.length === 0 ||
+    (Object.hasOwn(request, 'additions') && !Array.isArray(request.additions)) ||
+    (Object.hasOwn(request, 'replacements') && !Array.isArray(request.replacements)) ||
     !Array.isArray(request.obsolete)
   )
     return false;
@@ -1216,22 +1242,101 @@ function validConsumerReconciliationRequest(request) {
       return false;
     sourcePaths.add(source.sourcePath);
   }
+  const additionFamilies = new Set();
+  const additionUnits = new Set();
+  const additionConsumers = new Set();
+  for (const addition of request.additions ?? []) {
+    if (
+      !hasExactKeys(addition, CONSUMER_RECONCILIATION_ADDITION_KEYS) ||
+      !CONSUMER_FAMILY_ID.test(addition.familyId ?? '') ||
+      additionFamilies.has(addition.familyId) ||
+      !Array.isArray(addition.unitIds) ||
+      addition.unitIds.length === 0 ||
+      !Array.isArray(addition.consumers) ||
+      addition.consumers.length === 0
+    )
+      return false;
+    additionFamilies.add(addition.familyId);
+    for (const unitId of addition.unitIds) {
+      if (!nonEmptyString(unitId) || additionUnits.has(unitId)) return false;
+      additionUnits.add(unitId);
+    }
+    for (const consumer of addition.consumers) {
+      if (
+        !hasExactKeys(consumer, CONSUMER_RECONCILIATION_ADDITION_CONSUMER_KEYS) ||
+        !validConsumerSourcePath(consumer.sourcePath) ||
+        !sourcePaths.has(consumer.sourcePath) ||
+        !nonEmptyString(consumer.functionName) ||
+        !nonEmptyString(consumer.argument) ||
+        !Number.isInteger(consumer.occurrence) ||
+        consumer.occurrence < 1
+      )
+        return false;
+      const identity = `${consumer.sourcePath}|${consumer.functionName}|${consumer.argument}|${consumer.occurrence}`;
+      if (additionConsumers.has(identity)) return false;
+      additionConsumers.add(identity);
+    }
+  }
+  const replacementFamilies = new Set();
+  const replacementConsumers = new Set();
+  for (const replacement of request.replacements ?? []) {
+    if (
+      !hasExactKeys(replacement, CONSUMER_RECONCILIATION_REPLACEMENT_KEYS) ||
+      !CONSUMER_FAMILY_ID.test(replacement.familyId ?? '') ||
+      additionFamilies.has(replacement.familyId) ||
+      replacementFamilies.has(replacement.familyId)
+    )
+      return false;
+    replacementFamilies.add(replacement.familyId);
+    for (const consumer of [replacement.oldConsumer, replacement.newConsumer]) {
+      if (
+        !hasExactKeys(consumer, CONSUMER_RECONCILIATION_REPLACEMENT_CONSUMER_KEYS) ||
+        !validConsumerSourcePath(consumer.sourcePath) ||
+        !sourcePaths.has(consumer.sourcePath) ||
+        !nonEmptyString(consumer.functionName) ||
+        !nonEmptyString(consumer.argument) ||
+        !Number.isInteger(consumer.occurrence) ||
+        consumer.occurrence < 1
+      )
+        return false;
+      const identity = `${consumer.sourcePath}|${consumer.functionName}|${consumer.argument}|${consumer.occurrence}`;
+      if (additionConsumers.has(identity) || replacementConsumers.has(identity)) return false;
+      replacementConsumers.add(identity);
+    }
+    if (
+      `${replacement.oldConsumer.sourcePath}|${replacement.oldConsumer.functionName}|${replacement.oldConsumer.argument}|${replacement.oldConsumer.occurrence}` ===
+      `${replacement.newConsumer.sourcePath}|${replacement.newConsumer.functionName}|${replacement.newConsumer.argument}|${replacement.newConsumer.occurrence}`
+    )
+      return false;
+  }
   const obsoleteIdentities = new Set();
   for (const obsolete of request.obsolete) {
-    const keys =
-      obsolete?.kind === 'dynamicConsumer'
-        ? CONSUMER_RECONCILIATION_DYNAMIC_OBSOLETE_KEYS
-        : CONSUMER_RECONCILIATION_OBSOLETE_KEYS;
+    const isDynamic = obsolete?.kind === 'dynamicConsumer';
+    const isLegacyDynamic =
+      isDynamic && hasExactKeys(obsolete, LEGACY_CONSUMER_RECONCILIATION_DYNAMIC_OBSOLETE_KEYS);
+    const keys = isDynamic
+      ? CONSUMER_RECONCILIATION_DYNAMIC_OBSOLETE_KEYS
+      : CONSUMER_RECONCILIATION_OBSOLETE_KEYS;
     if (
-      !hasExactKeys(obsolete, keys) ||
+      (!hasExactKeys(obsolete, keys) && !isLegacyDynamic) ||
       !CONSUMER_RECONCILIATION_KINDS.has(obsolete.kind) ||
       !validConsumerSourcePath(obsolete.sourcePath) ||
       !nonEmptyString(obsolete.functionName) ||
-      !nonEmptyString(obsolete.bindingName) ||
-      (obsolete.kind === 'dynamicConsumer' && !nonEmptyString(obsolete.familyId))
+      (isDynamic
+        ? isLegacyDynamic
+          ? !nonEmptyString(obsolete.bindingName) || !nonEmptyString(obsolete.familyId)
+          : !nonEmptyString(obsolete.familyId) ||
+            !nonEmptyString(obsolete.argument) ||
+            !Number.isInteger(obsolete.occurrence) ||
+            obsolete.occurrence < 1
+        : !nonEmptyString(obsolete.bindingName))
     )
       return false;
-    const identity = `${obsolete.kind}|${obsolete.sourcePath}|${obsolete.functionName}|${obsolete.bindingName}|${obsolete.familyId ?? ''}`;
+    const identity = isDynamic
+      ? isLegacyDynamic
+        ? `${obsolete.kind}|${obsolete.sourcePath}|${obsolete.functionName}|legacy|${obsolete.bindingName}|${obsolete.familyId}`
+        : `${obsolete.kind}|${obsolete.sourcePath}|${obsolete.functionName}|${obsolete.familyId}|${obsolete.argument}|${obsolete.occurrence}`
+      : `${obsolete.kind}|${obsolete.sourcePath}|${obsolete.functionName}|${obsolete.bindingName}`;
     if (obsoleteIdentities.has(identity)) return false;
     obsoleteIdentities.add(identity);
   }

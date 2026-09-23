@@ -30,6 +30,20 @@ export function createBrowserAccessTokenStore(
   };
 }
 
+export function isAccessTokenStorageEvent(
+  event: StorageEvent,
+  storageKey = ACCESS_TOKEN_STORAGE_KEY,
+): boolean {
+  if (event.key !== storageKey && event.key !== null) return false;
+
+  if (!event.storageArea) return true;
+  try {
+    return event.storageArea === getBrowserStorage();
+  } catch {
+    return true;
+  }
+}
+
 export function createExceptionSafeAccessTokenStore(
   store: AccessTokenStore,
 ): ExceptionSafeAccessTokenStore {

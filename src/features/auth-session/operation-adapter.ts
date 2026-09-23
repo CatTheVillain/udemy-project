@@ -9,7 +9,11 @@ import {
 import type { ApiRequestOptions } from '@shared/api';
 import type { SessionContextValue } from './SessionProvider';
 
-type SessionOperationRequester = SessionContextValue['requestPublic'];
+interface SessionOperationRequester {
+  <TResponse, TBody = unknown>(
+    options: ApiRequestOptions<TBody, NoInfer<TResponse>>,
+  ): Promise<TResponse>;
+}
 
 type OperationRequestArguments<TResponse, TBody> = {
   [TId in SelectedApiOperationId]: [

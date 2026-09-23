@@ -18,8 +18,8 @@ const {
 } = await import('../../../scripts/localization/corpus-engine.mjs');
 
 const temporaryDirectories: string[] = [];
-const SOURCE_PATH = 'pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx';
-const FUNCTION_NAME = 'uploadRule';
+const SOURCE_PATH = 'pages/instructor-course-enrollments-page/InstructorCourseEnrollmentsPage.tsx';
+const FUNCTION_NAME = 'enrollmentStatusLabel';
 const BINDING_NAME = 't';
 const TASK_ID = 'FE-015';
 const COURSE_DETAIL_SOURCE_PATH = 'pages/course-detail-page/CourseDetailPage.tsx';
@@ -32,7 +32,7 @@ function staleCorpus() {
       wrapper.functionName === FUNCTION_NAME &&
       wrapper.bindingName === BINDING_NAME,
   );
-  if (matches.length !== 1) throw new Error('fixture requires one uploadRule translator wrapper');
+  if (matches.length !== 1) throw new Error('fixture requires one retained translator wrapper');
   matches[0].sourceFingerprint = `sha256:${'0'.repeat(64)}`;
   return corpus;
 }
@@ -55,7 +55,7 @@ function expectedCorpus(sourceFingerprint: string) {
       wrapper.functionName === FUNCTION_NAME &&
       wrapper.bindingName === BINDING_NAME,
   );
-  if (matches.length !== 1) throw new Error('fixture requires one uploadRule translator wrapper');
+  if (matches.length !== 1) throw new Error('fixture requires one retained translator wrapper');
   matches[0].sourceFingerprint = sourceFingerprint;
   return next;
 }

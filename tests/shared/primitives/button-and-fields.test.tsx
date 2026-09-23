@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { PropsWithChildren, ReactNode } from 'react';
+import { act, type PropsWithChildren, type ReactNode } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -139,6 +139,7 @@ describe('form primitives', () => {
   });
 
   it('renders Select as the shared listbox pattern with a selected radio option', async () => {
+    const user = userEvent.setup();
     const onValueChange = vi.fn();
     renderWithLocale(
       <Select label="Lesson type" defaultValue="video" onValueChange={onValueChange}>
@@ -152,7 +153,7 @@ describe('form primitives', () => {
     expect(trigger.tagName).toBe('BUTTON');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
 
-    fireEvent.click(trigger);
+    await user.click(trigger);
 
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
     expect(trigger.querySelector('[data-part="select-chevron"]')).toBeTruthy();
@@ -165,11 +166,47 @@ describe('form primitives', () => {
       screen.getByRole('option', { name: 'Video' }).querySelector('[data-part="select-radio"]'),
     ).toBeTruthy();
 
-    fireEvent.pointerDown(screen.getByRole('option', { name: 'Text' }), { button: 0 });
+    await user.click(screen.getByRole('option', { name: 'Text' }));
 
+    expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith('text');
     expect(trigger.textContent).toContain('Text');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('does not commit a cancelled touch gesture or a disabled option', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    renderWithLocale(
+      <Select label="Lesson type" defaultValue="video" onValueChange={onValueChange}>
+        <option value="video">Video</option>
+        <option value="text">Text</option>
+        <option value="pdf" disabled>
+          PDF
+        </option>
+      </Select>,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Lesson type' });
+    await user.click(trigger);
+    const textOption = screen.getByRole('option', { name: 'Text' });
+
+    act(() => {
+      fireEvent.pointerDown(textOption, { button: 0, pointerId: 1, pointerType: 'touch' });
+      fireEvent.pointerLeave(textOption, { pointerId: 1, pointerType: 'touch' });
+      fireEvent.pointerCancel(textOption, { pointerId: 1, pointerType: 'touch' });
+      fireEvent.pointerUp(document.body, { button: 0, pointerId: 1, pointerType: 'touch' });
+    });
+
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(trigger.textContent).toContain('Video');
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    await user.click(screen.getByRole('option', { name: 'PDF' }));
+
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(trigger.textContent).toContain('Video');
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('supports keyboard selection and restores focus after Escape', async () => {

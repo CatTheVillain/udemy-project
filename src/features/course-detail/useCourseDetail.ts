@@ -45,11 +45,26 @@ export type CourseMutationKind = 'enroll' | 'cart';
 
 export type CourseActionIdentity = string;
 
+interface IdleCourseMutationViewState {
+  readonly status: 'idle';
+}
+interface PendingCourseMutationViewState {
+  readonly status: 'pending';
+}
+interface SuccessfulCourseMutationViewState {
+  readonly status: 'success';
+  readonly action: CourseMutationKind;
+}
+interface FailedCourseMutationViewState {
+  readonly status: 'error';
+  readonly disposition: CourseMutationDisposition;
+}
+
 export type CourseMutationViewState =
-  | { status: 'idle' }
-  | { status: 'pending' }
-  | { status: 'success'; action: CourseMutationKind }
-  | { status: 'error'; disposition: CourseMutationDisposition };
+  | IdleCourseMutationViewState
+  | PendingCourseMutationViewState
+  | SuccessfulCourseMutationViewState
+  | FailedCourseMutationViewState;
 
 interface CourseMutationAttempt {
   identity: CourseActionIdentity;
@@ -68,7 +83,7 @@ interface ScopedServerDisposition {
 
 interface ScopedMutationFeedback {
   identity: CourseActionIdentity;
-  state: Extract<CourseMutationViewState, { status: 'success' | 'error' }>;
+  state: SuccessfulCourseMutationViewState | FailedCourseMutationViewState;
 }
 
 function mutationViewState(

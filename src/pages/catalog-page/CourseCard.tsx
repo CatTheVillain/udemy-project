@@ -101,8 +101,8 @@ export function CourseCard({
   ].filter((id): id is string => id !== null);
   const linkRef = useRef<HTMLAnchorElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const openTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
-  const closeTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const openTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
   const [tooltipPlacement, setTooltipPlacement] = useState<CourseCardTooltipPlacement | null>(null);
   const tooltipPlacementMode = tooltipPlacement?.mode;
   const tooltipPlacementWidth = tooltipPlacement?.width;
@@ -253,18 +253,18 @@ export function CourseCard({
       : styles.tooltipBottom;
   const tooltipPlacementName = tooltipPlacement?.mode === 'side' ? tooltipPlacement.side : 'bottom';
   const clearOpenTimer = useCallback(() => {
-    if (openTimerRef.current !== null) globalThis.clearTimeout(openTimerRef.current);
+    if (openTimerRef.current !== null) window.clearTimeout(openTimerRef.current);
     openTimerRef.current = null;
   }, []);
   const clearCloseTimer = useCallback(() => {
-    if (closeTimerRef.current !== null) globalThis.clearTimeout(closeTimerRef.current);
+    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
   }, []);
   const requestTransientPreview = useCallback(() => {
     if (!isDisclosureAvailable || !supportsFinePointer() || hasPinnedDisclosure) return;
     clearCloseTimer();
     if (isDisclosureVisible || openTimerRef.current !== null) return;
-    openTimerRef.current = globalThis.setTimeout(() => {
+    openTimerRef.current = window.setTimeout(() => {
       openTimerRef.current = null;
       onTransientDisclosurePreviewStart(course.id);
     }, DISCLOSURE_OPEN_DELAY);
@@ -285,7 +285,7 @@ export function CourseCard({
       closeTimerRef.current !== null
     )
       return;
-    closeTimerRef.current = globalThis.setTimeout(() => {
+    closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       onTransientDisclosurePreviewEnd(course.id);
     }, DISCLOSURE_CLOSE_DELAY);

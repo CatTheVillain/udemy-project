@@ -23,10 +23,18 @@ import heroImage from './assets/ai-chat-hero-ui020-1.png';
 
 import styles from './AiChatPage.module.css';
 
-type AssistantRoute =
-  | { readonly kind: 'general' }
-  | { readonly kind: 'course'; readonly enrollmentId: number }
-  | { readonly kind: 'invalid' };
+interface GeneralAssistantRoute {
+  readonly kind: 'general';
+}
+interface CourseAssistantRoute {
+  readonly kind: 'course';
+  readonly enrollmentId: number;
+}
+interface InvalidAssistantRoute {
+  readonly kind: 'invalid';
+}
+
+type AssistantRoute = GeneralAssistantRoute | CourseAssistantRoute | InvalidAssistantRoute;
 
 function assistantRouteFromEnrollmentId(value: string | undefined): AssistantRoute {
   if (value === undefined) return { kind: 'general' };

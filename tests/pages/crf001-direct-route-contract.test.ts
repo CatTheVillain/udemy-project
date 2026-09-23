@@ -56,7 +56,7 @@ describe('CRF-001 direct-route and Cart contract', () => {
   });
 
   it('does not keep a My Learning continuation in uncorrelated Cart notices', async () => {
-    const source = await readSource('pages/cart-page/CartPage.tsx');
+    const source = await readSource('pages/cart-page/CompositeCheckoutNotice.tsx');
 
     expect(source).toContain("t('cart:paymentResultNeedsChecking')");
     expect(source).toContain("t('cart:doNotStartAnotherPayment')");

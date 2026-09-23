@@ -24,7 +24,7 @@ interface CatalogFilterBarProps {
   readonly maximumPricePlaceholder?: string;
 }
 
-type HoverCloseTimer = ReturnType<typeof setTimeout>;
+type HoverCloseTimer = number;
 type PriceDisclosureOpenMode = 'hover' | 'persistent' | null;
 type DismissDraft = (restoreFocus?: boolean) => void;
 
@@ -139,7 +139,7 @@ export function CatalogFilterBar({
   };
   const cancelHoverClose = () => {
     if (hoverCloseTimerRef.current === null) return;
-    clearTimeout(hoverCloseTimerRef.current);
+    window.clearTimeout(hoverCloseTimerRef.current);
     hoverCloseTimerRef.current = null;
   };
   const close = (restoreApplied = false, restoreFocus = true) => {
@@ -152,7 +152,7 @@ export function CatalogFilterBar({
       setErrors({});
     }
     setOpen(false);
-    if (restoreFocus) globalThis.setTimeout(() => triggerRef.current?.focus(), 0);
+    if (restoreFocus) window.setTimeout(() => triggerRef.current?.focus(), 0);
   };
   const supportsFinePointerHover = (pointerType: string) =>
     pointerType === 'mouse' &&
@@ -170,7 +170,7 @@ export function CatalogFilterBar({
   const closeAfterHover = (pointerType: string) => {
     if (!supportsFinePointerHover(pointerType) || openModeRef.current === null) return;
     cancelHoverClose();
-    hoverCloseTimerRef.current = setTimeout(() => {
+    hoverCloseTimerRef.current = window.setTimeout(() => {
       hoverCloseTimerRef.current = null;
       dismissDraft(false);
     }, HOVER_CLOSE_DELAY_MS);
@@ -188,7 +188,7 @@ export function CatalogFilterBar({
   };
   useEffect(
     () => () => {
-      if (hoverCloseTimerRef.current !== null) clearTimeout(hoverCloseTimerRef.current);
+      if (hoverCloseTimerRef.current !== null) window.clearTimeout(hoverCloseTimerRef.current);
     },
     [],
   );

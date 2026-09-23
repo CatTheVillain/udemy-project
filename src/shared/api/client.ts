@@ -4,11 +4,12 @@ export type ApiMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 export type AuthPolicy = 'public' | 'optional' | 'required';
 export type QueryValue = string | number | boolean | null | undefined;
 type ApiResponseType = 'json' | 'blob';
+export type ApiQuery = Readonly<Record<string, QueryValue>>;
 
 export interface ApiRequestOptions<TBody = unknown, TResponse = unknown> {
   method?: ApiMethod;
   path: string;
-  query?: Readonly<Record<string, QueryValue>>;
+  query?: ApiQuery;
   body?: TBody;
   headers?: Readonly<Record<string, string>>;
   signal?: AbortSignal;
@@ -22,14 +23,26 @@ export interface ApiClientConfig {
   baseUrl?: string;
   fetch?: typeof fetch;
   getAccessToken?: () => string | null | undefined;
+  getRequestIdentity?: () => string | null | undefined;
+  isRequestIdentityCurrent?: (identity: string) => boolean;
   onUnauthorized?: (error: ApiError) => void;
   maxSafeAttempts?: number;
   retryDelayMs?: number;
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
+function staleRequestError(): ApiError {
+  return new ApiError({
+    kind: 'aborted',
+    status: null,
+    message: 'Request belongs to a replaced session',
+  });
+}
+
 export interface ApiClient {
-  request<TResponse, TBody = unknown>(options: ApiRequestOptions<TBody, TResponse>): Promise<TResponse>;
+  request<TResponse, TBody = unknown>(
+    options: ApiRequestOptions<TBody, TResponse>,
+  ): Promise<TResponse>;
 }
 
 export interface ApiBinaryResponse {
@@ -39,7 +52,7 @@ export interface ApiBinaryResponse {
   filename?: string;
 }
 
-function buildUrl(baseUrl: string, path: string, query?: ApiRequestOptions['query']): string {
+function buildUrl(baseUrl: string, path: string, query?: ApiQuery): string {
   const normalizedBase = baseUrl.replace(/\/$/, '');
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const url = `${normalizedBase}${normalizedPath}`;
@@ -58,7 +71,12 @@ function buildUrl(baseUrl: string, path: string, query?: ApiRequestOptions['quer
   return search === '' ? url : `${url}?${search}`;
 }
 
-function shouldRetry(method: ApiMethod, error: ApiError, attempt: number, maxAttempts: number): boolean {
+function shouldRetry(
+  method: ApiMethod,
+  error: ApiError,
+  attempt: number,
+  maxAttempts: number,
+): boolean {
   if (method !== 'GET' || attempt >= maxAttempts || error.kind === 'aborted') {
     return false;
   }
@@ -70,7 +88,7 @@ function responseDecoder<TBody, TResponse>(
   options: ApiRequestOptions<TBody, TResponse>,
 ): ((value: unknown) => TResponse) | undefined {
   return 'decode' in options
-    ? options.decode as ((value: unknown) => TResponse) | undefined
+    ? (options.decode as ((value: unknown) => TResponse) | undefined)
     : undefined;
 }
 
@@ -80,10 +98,12 @@ function normalizeContentType(headerValue: string | null, blob: Blob): string | 
 }
 
 function stripControlCharacters(value: string): string {
-  return Array.from(value).filter((character) => {
-    const codePoint = character.codePointAt(0);
-    return codePoint !== undefined && codePoint > 0x1f && codePoint !== 0x7f;
-  }).join('');
+  return Array.from(value)
+    .filter((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint !== undefined && codePoint > 0x1f && codePoint !== 0x7f;
+    })
+    .join('');
 }
 
 function safeFilename(contentDisposition: string | null): string | undefined {
@@ -136,24 +156,38 @@ async function parseSuccess<TResponse>(
   }
 
   const value: unknown = await response.json();
-  return decode ? decode(value) : value as TResponse;
+  return decode ? decode(value) : (value as TResponse);
 }
 
 export function createApiClient(config: ApiClientConfig = {}): ApiClient {
   const fetchImplementation = config.fetch ?? globalThis.fetch;
   const maxSafeAttempts = Math.max(1, config.maxSafeAttempts ?? 2);
   const retryDelayMs = Math.max(0, config.retryDelayMs ?? 100);
-  const sleep = config.sleep ?? ((milliseconds: number) => new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  }));
+  const sleep =
+    config.sleep ??
+    ((milliseconds: number) =>
+      new Promise((resolve) => {
+        setTimeout(resolve, milliseconds);
+      }));
   const inFlight = new Map<string, Promise<unknown>>();
+
+  function assertRequestIdentity(identity: string | null): void {
+    if (
+      identity !== null &&
+      config.isRequestIdentityCurrent !== undefined &&
+      !config.isRequestIdentityCurrent(identity)
+    ) {
+      throw staleRequestError();
+    }
+  }
 
   async function execute<TResponse, TBody>(
     options: ApiRequestOptions<TBody, TResponse>,
+    token: string | null | undefined,
+    identity: string | null,
   ): Promise<TResponse> {
     const method = options.method ?? 'GET';
     const url = buildUrl(config.baseUrl ?? '', options.path, options.query);
-    const token = options.authPolicy === 'public' ? null : config.getAccessToken?.();
     const headers = new Headers(options.headers);
     if (options.authPolicy === 'public') {
       headers.delete('Authorization');
@@ -172,19 +206,22 @@ export function createApiClient(config: ApiClientConfig = {}): ApiClient {
     while (attempt < maxSafeAttempts) {
       attempt += 1;
       try {
+        assertRequestIdentity(identity);
         const response = await fetchImplementation(url, {
           method,
           headers,
-          body: options.body === undefined
-            ? undefined
-            : isFormData
-              ? options.body as BodyInit
-              : JSON.stringify(options.body),
+          body:
+            options.body === undefined
+              ? undefined
+              : isFormData
+                ? (options.body as BodyInit)
+                : JSON.stringify(options.body),
           signal: options.signal,
         });
 
         if (!response.ok) {
           const apiError = await normalizeHttpError(response);
+          assertRequestIdentity(identity);
           if (apiError.status === 401) {
             try {
               config.onUnauthorized?.(apiError);
@@ -199,8 +236,9 @@ export function createApiClient(config: ApiClientConfig = {}): ApiClient {
           throw apiError;
         }
 
+        let parsed: TResponse;
         try {
-          return await parseSuccess<TResponse>(
+          parsed = await parseSuccess<TResponse>(
             response,
             options.responseType ?? 'json',
             responseDecoder(options),
@@ -213,8 +251,11 @@ export function createApiClient(config: ApiClientConfig = {}): ApiClient {
             cause: error,
           });
         }
+        assertRequestIdentity(identity);
+        return parsed;
       } catch (error) {
         const apiError = normalizeTransportError(error);
+        assertRequestIdentity(identity);
         if (shouldRetry(method, apiError, attempt, maxSafeAttempts)) {
           await sleep(retryDelayMs);
           continue;
@@ -230,19 +271,22 @@ export function createApiClient(config: ApiClientConfig = {}): ApiClient {
     request<TResponse, TBody = unknown>(
       options: ApiRequestOptions<TBody, TResponse>,
     ): Promise<TResponse> {
+      const token = options.authPolicy === 'public' ? null : config.getAccessToken?.();
+      const identity =
+        options.authPolicy === 'public' ? null : (config.getRequestIdentity?.() ?? null);
       if (!options.dedupeKey) {
-        return execute<TResponse, TBody>(options);
+        return execute<TResponse, TBody>(options, token, identity);
       }
 
       const method = options.method ?? 'GET';
       const url = buildUrl(config.baseUrl ?? '', options.path, options.query);
-      const key = `${method}:${url}:${options.dedupeKey}`;
+      const key = `${method}:${url}:${identity ?? `token:${token ?? 'anonymous'}`}:${options.dedupeKey}`;
       const existing = inFlight.get(key);
       if (existing) {
         return existing as Promise<TResponse>;
       }
 
-      const request = execute<TResponse, TBody>(options).finally(() => {
+      const request = execute<TResponse, TBody>(options, token, identity).finally(() => {
         inFlight.delete(key);
       });
       inFlight.set(key, request);
