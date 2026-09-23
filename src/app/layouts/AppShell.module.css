@@ -1272,6 +1272,7 @@
   }
 
   .headerAuthenticatedMobile.headerInstructorCourses .headerCatalogEnd {
+    flex: 1;
     margin-left: 0;
   }
 
