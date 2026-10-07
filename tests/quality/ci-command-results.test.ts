@@ -20,6 +20,7 @@ import {
   validateCiProducerResults,
 } from '../../scripts/quality/ci-command-results.mjs';
 import type {
+  CiGroupAnalysis,
   CiGroupResultEnvelope,
   CiProducerResults,
   CiRunIdentity,
@@ -30,6 +31,8 @@ const targetSha = '3c697ce01d58531bd000491d6edbbecc02a7192e';
 const ciRun: CiRunIdentity = { runId: '4312', runAttempt: '2' };
 const generatedAt = '2026-09-05T12:00:00.000Z';
 const now = new Date('2026-09-05T12:01:00.000Z');
+const deterministicReportLimitation =
+  'Report pass is deterministic evidence only; it is not a semantic or architectural Review or QA verdict.';
 const toolVersions: ToolVersions = {
   node: 'v20.19.1',
   npm: '10.8.2',
@@ -60,12 +63,18 @@ function command(id: (typeof REQUIRED_QUALITY_COMMAND_IDS)[number]): QualityComm
   };
 }
 
-function analysis() {
+function analysis(): CiGroupAnalysis {
   return {
     findings: [],
     suppressions: [],
-    advisory: { complexitySignals: [] },
-    configVersions: { reportSchema: 2, staticRules: 1 },
+    advisory: {
+      complexitySignals: [],
+      complexityReview: {
+        basis: 'independent-responsibilities',
+        guidance: 'Fixture preserves the required responsibility review contract.',
+      },
+    },
+    configVersions: { reportSchema: 3, staticRules: 2 },
   };
 }
 
@@ -188,6 +197,7 @@ describe('parallel CI quality result assembly', () => {
       runAttempt: ciRun.runAttempt,
     });
     expect(assembled.commands).toHaveLength(8);
+    expect(assembled.limitations).toContain(deterministicReportLimitation);
   });
 
   it('assembles mixed producer attempts only when each exact published attempt matches', () => {

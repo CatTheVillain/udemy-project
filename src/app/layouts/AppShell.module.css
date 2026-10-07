@@ -1271,6 +1271,10 @@
     gap: var(--spacing-1);
   }
 
+  .headerAuthenticatedMobile.headerInstructorCourses .headerCatalogEnd > .navAction {
+    display: none;
+  }
+
   .headerAuthenticatedMobile .headerCatalogEnd {
     gap: var(--spacing-2);
     margin-left: auto;

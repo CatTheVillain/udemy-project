@@ -2,8 +2,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { queryKeys } from '@entities/api';
-import type { Enrollment, EnrollmentCourseSummary } from '@entities/enrollment';
-import { useSession, type SessionContextValue } from '@features/auth-session';
+import type { Enrollment, EnrollmentCourseSummary, EnrollmentStatus } from '@entities/enrollment';
+import { useSession, type SessionContextValue, type SessionIdentity } from '@features/auth-session';
 import { cartQueryKey, removeCartItem, requestCart } from '@features/cart-workflow';
 import { addCourseToCart, requestEnrollments } from '@features/course-detail';
 import { requestLearningEnrollment } from '@features/learning-progress';
@@ -38,6 +38,12 @@ export type CartCompositeCourseResultKind = 'active' | 'restored' | 'integrity_u
 
 type CartCompositeTerminalPhase = 'checkout_completed' | 'checkout_integrity_unknown';
 
+type CheckoutSessionIdentityOwner = Required<
+  Pick<SessionContextValue, 'captureSessionIdentity' | 'isSessionIdentityCurrent'>
+>;
+
+type CartCompositeSessionIdentity = SessionIdentity;
+
 export interface CartCompositeCourseResult {
   readonly enrollmentId: number;
   readonly courseId: number;
@@ -52,6 +58,7 @@ export interface CartCompositeRecoveryCandidate {
 
 interface CartCompositeRecoveryContext {
   readonly subject: SessionCacheEpoch;
+  readonly sessionIdentity: CartCompositeSessionIdentity;
   readonly snapshotInputs: readonly CartCompositeSnapshotInput[];
   readonly discoveredEnrollmentIdentities: readonly CartCompositeEnrollmentIdentity[];
   readonly candidates: readonly CartCompositeRecoveryCandidate[];
@@ -60,6 +67,7 @@ interface CartCompositeRecoveryContext {
 interface CartCompositeRecoveryDiscoveryAttempt {
   readonly identity: number;
   readonly subject: SessionCacheEpoch;
+  readonly sessionIdentity: CartCompositeSessionIdentity;
   readonly controller: AbortController;
 }
 
@@ -87,6 +95,7 @@ export interface CartCompositeCheckoutStartOptions {
 interface CartCompositeLiveAttempt {
   readonly identity: number;
   readonly subject: SessionCacheEpoch;
+  readonly sessionIdentity: CartCompositeSessionIdentity;
   readonly snapshot: ReadyCartCompositeSnapshot;
   readonly controller: AbortController;
   readonly completionDelayMs: number;
@@ -142,7 +151,7 @@ function isCartCompositePending(phase: CartCompositeCheckoutPhase): boolean {
 export function useCartCompositeCheckout(
   courses: readonly CartCompositeSnapshotInput[],
 ): CartCompositeCheckoutWorkflow {
-  const session = useSession();
+  const session = useSession() as SessionContextValue & CheckoutSessionIdentityOwner;
   const queryClient = useQueryClient();
   const subject = subjectFor(session);
   const mountedRef = useRef(true);
@@ -163,8 +172,8 @@ export function useCartCompositeCheckout(
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      activeAttemptRef.current?.controller.abort();
-      activeAttemptRef.current = null;
+      // A retry may have already removed retained courses. Keep that attempt alive so it can
+      // compensate during an ordinary unmount, but only while its captured session stays live.
       recoveryDiscoveryRef.current?.controller.abort();
       recoveryDiscoveryRef.current = null;
     };
@@ -191,6 +200,7 @@ export function useCartCompositeCheckout(
       mountedRef.current &&
       activeAttemptRef.current?.identity === attempt.identity &&
       subjectRef.current === attempt.subject &&
+      session.isSessionIdentityCurrent(attempt.sessionIdentity) &&
       !attempt.controller.signal.aborted
     );
   }
@@ -200,6 +210,7 @@ export function useCartCompositeCheckout(
       mountedRef.current &&
       recoveryDiscoveryRef.current?.identity === attempt.identity &&
       subjectRef.current === attempt.subject &&
+      session.isSessionIdentityCurrent(attempt.sessionIdentity) &&
       !attempt.controller.signal.aborted
     );
   }
@@ -231,7 +242,13 @@ export function useCartCompositeCheckout(
       });
       snapshotInputs.push({ courseId: enrollment.courseId, price: enrollment.course.price });
     }
-    return { subject: attempt.subject, snapshotInputs, discoveredEnrollmentIdentities, candidates };
+    return {
+      subject: attempt.subject,
+      sessionIdentity: attempt.sessionIdentity,
+      snapshotInputs,
+      discoveredEnrollmentIdentities,
+      candidates,
+    };
   }
 
   async function invalidateForSubject(attemptSubject: SessionCacheEpoch): Promise<void> {
@@ -281,13 +298,14 @@ export function useCartCompositeCheckout(
     removedCourses: readonly CartCompositeSnapshotInput[],
   ): Promise<boolean> {
     for (const removedCourse of removedCourses) {
+      if (!session.isSessionIdentityCurrent(attempt.sessionIdentity)) return false;
       try {
         await addCourseToCart(session, removedCourse.courseId);
       } catch {
         // The final Cart read below is the only proof that a lost add response restored the course.
       }
     }
-    if (!isCurrent(attempt)) return false;
+    if (!session.isSessionIdentityCurrent(attempt.sessionIdentity)) return false;
     try {
       const cart = await requestCart(session, attempt.controller.signal);
       return removedCourses.every((removedCourse) =>
@@ -302,8 +320,9 @@ export function useCartCompositeCheckout(
     attempt: CartCompositeLiveAttempt,
     item: CartCompositeCompletionPlanItem,
   ): Promise<CartCompositeCourseResult | null> {
-    let status: Enrollment['status'] | null = null;
+    let status: EnrollmentStatus | null = null;
     try {
+      if (!isCurrent(attempt)) return null;
       attempt.mayHaveMutated = true;
       const completion = await requestMockPaymentCompletion(
         session,
@@ -446,6 +465,7 @@ export function useCartCompositeCheckout(
     const attempt: CartCompositeLiveAttempt = {
       identity: attemptSequenceRef.current,
       subject,
+      sessionIdentity: session.captureSessionIdentity(),
       snapshot,
       controller: new AbortController(),
       completionDelayMs:
@@ -460,6 +480,7 @@ export function useCartCompositeCheckout(
     setPhase('checking_checkout');
     void (async () => {
       try {
+        if (!isCurrent(attempt)) return;
         await requestCheckout(session).catch(() => undefined);
         if (!isCurrent(attempt)) return;
         const [enrollments, freshCart] = await Promise.all([
@@ -515,6 +536,7 @@ export function useCartCompositeCheckout(
     const attempt: CartCompositeLiveAttempt = {
       identity: attemptSequenceRef.current,
       subject,
+      sessionIdentity: session.captureSessionIdentity(),
       snapshot,
       controller: new AbortController(),
       completionDelayMs: 0,
@@ -539,11 +561,19 @@ export function useCartCompositeCheckout(
       try {
         for (const retainedCourse of retainedCourses) {
           possiblyRemovedCourses.set(retainedCourse.courseId, retainedCourse);
+          if (!isCurrent(attempt)) {
+            await compensateRemovedCourses();
+            return;
+          }
           await removeCartItem(session, retainedCourse.courseId);
           if (!isCurrent(attempt)) {
             await compensateRemovedCourses();
             return;
           }
+        }
+        if (!isCurrent(attempt)) {
+          await compensateRemovedCourses();
+          return;
         }
         const isolatedCart = await requestCart(session, attempt.controller.signal);
         if (!isCurrent(attempt)) {
@@ -553,6 +583,10 @@ export function useCartCompositeCheckout(
         if (isolatedCart.items.length !== 1 || isolatedCart.items[0]?.courseId !== courseId) {
           await compensateRemovedCourses();
           await settleUnknown(attempt);
+          return;
+        }
+        if (!isCurrent(attempt)) {
+          await compensateRemovedCourses();
           return;
         }
         await requestCheckout(session).catch(() => undefined);
@@ -651,6 +685,7 @@ export function useCartCompositeCheckout(
     const attempt: CartCompositeRecoveryDiscoveryAttempt = {
       identity: attemptSequenceRef.current,
       subject,
+      sessionIdentity: session.captureSessionIdentity(),
       controller: new AbortController(),
     };
     recoveryDiscoveryRef.current = attempt;
@@ -661,7 +696,11 @@ export function useCartCompositeCheckout(
       try {
         const [enrollments, freshCart] = await Promise.all([
           requestEnrollments(session, attempt.controller.signal),
-          requestCart(session, attempt.controller.signal),
+          queryClient.fetchQuery({
+            queryKey: cartQueryKey(attempt.subject),
+            queryFn: ({ signal }) => requestCart(session, signal),
+            staleTime: 0,
+          }),
         ]);
         if (!isCurrentDiscovery(attempt)) return;
         const recovery = recoveryContextFrom(
@@ -694,6 +733,7 @@ export function useCartCompositeCheckout(
       subject === null ||
       recovery === null ||
       recovery.subject !== subject ||
+      !session.isSessionIdentityCurrent(recovery.sessionIdentity) ||
       phase !== 'recovery_candidates' ||
       activeAttemptRef.current !== null ||
       recoveryDiscoveryRef.current !== null ||
@@ -711,6 +751,7 @@ export function useCartCompositeCheckout(
     const attempt: CartCompositeLiveAttempt = {
       identity: attemptSequenceRef.current,
       subject,
+      sessionIdentity: session.captureSessionIdentity(),
       snapshot,
       controller: new AbortController(),
       completionDelayMs: 0,

@@ -68,11 +68,8 @@
 }
 
 .listbox {
-  position: absolute;
+  position: fixed;
   z-index: var(--z-dropdown);
-  top: calc(100% + var(--spacing-2));
-  right: 0;
-  left: 0;
   display: grid;
   box-sizing: border-box;
   max-height: min(15rem, 50vh);

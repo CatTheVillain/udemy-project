@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { StrictMode, type PropsWithChildren } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +15,7 @@ import {
   type AccessTokenStore,
   type SessionContextValue,
 } from '../../../src/features/auth-session';
-import { cartQueryKey } from '../../../src/features/cart-workflow';
+import { cartQueryKey, requestCart } from '../../../src/features/cart-workflow';
 import {
   ApiError,
   type ApiClient,
@@ -85,7 +85,7 @@ function deferred<TValue>(): Deferred<TValue> {
 }
 
 function enrollmentList(
-  status: 'pending_payment' | 'active' = 'pending_payment',
+  status: 'pending_payment' | 'active' | 'cancelled' = 'pending_payment',
   enrollmentId = 70,
 ) {
   return {
@@ -210,6 +210,34 @@ function createSessionHarness(request: ApiClient['request']) {
   };
 }
 
+function createOwnedSessionHarness(fetchImplementation: typeof fetch) {
+  const queryClient = createAppQueryClient();
+  let session: SessionContextValue | null = null;
+  function Wrapper({ children }: PropsWithChildren) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider
+          apiBaseUrl="https://api.learnhub.test"
+          fetchImplementation={fetchImplementation}
+          tokenStore={tokenStore()}
+        >
+          <SessionCapture
+            onSession={(nextSession) => {
+              session = nextSession;
+            }}
+          />
+          {children}
+        </SessionProvider>
+      </QueryClientProvider>
+    );
+  }
+  return {
+    Wrapper,
+    session: () => session,
+    queryClient,
+  };
+}
+
 describe('useCartCompositeCheckout', () => {
   it('discovers one safely recoverable pending enrollment without checkout or payment writes', async () => {
     const counts = { checkout: 0, enrollments: 0, cart: 0, payment: 0, restore: 0 };
@@ -289,6 +317,198 @@ describe('useCartCompositeCheckout', () => {
     });
     await waitFor(() => expect(result.current.phase).toBe('recovery_candidates'));
     expectOneRecoveryDiscoveryRead(counts);
+  });
+
+  it('joins an already in-flight shared Cart read when discovering recovery', async () => {
+    const requests: Array<{ method: string; path: string }> = [];
+    const cart = deferred<ReturnType<typeof emptyCart>>();
+    const request: ApiClient['request'] = async <TResponse, TBody>(
+      options: ApiRequestOptions<TBody, TResponse>,
+    ) => {
+      requests.push({ method: options.method ?? 'GET', path: options.path });
+      if (options.path === '/me') return decode(options, student);
+      if (options.path === '/enrollments/my') return decode(options, enrollmentList());
+      if (options.path === '/cart') return decode(options, await cart.promise);
+      throw new Error(`Unexpected request ${options.method} ${options.path}`);
+    };
+    const harness = createSessionHarness(request);
+    const { result } = renderHook(() => useCartCompositeCheckout([paidCourse]), {
+      wrapper: harness.Wrapper,
+    });
+
+    await waitFor(() => expect(harness.session()?.state.status).toBe('authenticated'));
+    const session = harness.session();
+    const subject = session?.cacheEpoch;
+    if (session === null || session === undefined || subject === null || subject === undefined)
+      throw new Error('Expected authenticated session and cache epoch');
+    const sharedRead = harness.queryClient.fetchQuery({
+      queryKey: cartQueryKey(subject),
+      queryFn: ({ signal }) => requestCart(session, signal),
+      staleTime: 0,
+    });
+    await waitFor(() => expect(requests).toContainEqual({ method: 'GET', path: '/cart' }));
+
+    act(() => result.current.discoverRecovery());
+    await waitFor(() => expect(result.current.phase).toBe('discovering_recovery'));
+    await waitFor(() =>
+      expect(requests.filter((request) => request.path === '/enrollments/my')).toHaveLength(1),
+    );
+    expect(requests.filter((request) => request.path === '/cart')).toEqual([
+      { method: 'GET', path: '/cart' },
+    ]);
+
+    await act(async () => {
+      cart.resolve(emptyCart());
+      await sharedRead;
+    });
+    await waitFor(() => expect(result.current.phase).toBe('recovery_candidates'));
+    expect(result.current.recoveryCandidates).toEqual([
+      expect.objectContaining({ enrollmentId: 70, courseId: 7 }),
+    ]);
+  });
+
+  it('uses a fresh authoritative Cart read when only a cached Cart value exists', async () => {
+    const requests: Array<{ method: string; path: string }> = [];
+    const request: ApiClient['request'] = async <TResponse, TBody>(
+      options: ApiRequestOptions<TBody, TResponse>,
+    ) => {
+      requests.push({ method: options.method ?? 'GET', path: options.path });
+      if (options.path === '/me') return decode(options, student);
+      if (options.path === '/enrollments/my') return decode(options, enrollmentList());
+      if (options.path === '/cart') return decode(options, emptyCart());
+      throw new Error(`Unexpected request ${options.method} ${options.path}`);
+    };
+    const harness = createSessionHarness(request);
+    const { result } = renderHook(() => useCartCompositeCheckout([paidCourse]), {
+      wrapper: harness.Wrapper,
+    });
+
+    await waitFor(() => expect(harness.session()?.state.status).toBe('authenticated'));
+    const subject = harness.session()?.cacheEpoch;
+    if (subject === null || subject === undefined)
+      throw new Error('Expected authenticated cache epoch');
+    harness.queryClient.setQueryData(cartQueryKey(subject), restoredCart());
+
+    act(() => result.current.discoverRecovery());
+    await waitFor(() => expect(result.current.phase).toBe('recovery_candidates'));
+    expect(requests.filter((request) => request.path === '/cart')).toEqual([
+      { method: 'GET', path: '/cart' },
+    ]);
+    expect(result.current.recoveryCandidates).toEqual([
+      expect.objectContaining({ enrollmentId: 70, courseId: 7 }),
+    ]);
+  });
+
+  it('does not abort a surviving shared Cart consumer when recovery discovery unmounts', async () => {
+    const cart = deferred<ReturnType<typeof emptyCart>>();
+    let cartAborts = 0;
+    let cartRequests = 0;
+    let workflow: ReturnType<typeof useCartCompositeCheckout> | null = null;
+    let sharedCartStatus = 'pending';
+    let session: SessionContextValue | null = null;
+    const capturedSession = () => session;
+    const queryClient = createAppQueryClient();
+    const request: ApiClient['request'] = async <TResponse, TBody>(
+      options: ApiRequestOptions<TBody, TResponse>,
+    ) => {
+      if (options.path === '/me') return decode(options, student);
+      if (options.path === '/enrollments/my') return decode(options, enrollmentList());
+      if (options.path === '/cart') {
+        cartRequests += 1;
+        options.signal?.addEventListener('abort', () => {
+          cartAborts += 1;
+        });
+        return decode(options, await cart.promise);
+      }
+      throw new Error(`Unexpected request ${options.method} ${options.path}`);
+    };
+    const client = { request };
+    const store = tokenStore();
+    function SharedCartConsumer() {
+      const session = useSession();
+      const subject = session.cacheEpoch;
+      const cartQuery = useQuery({
+        queryKey: subject ? cartQueryKey(subject) : ['disabled', 'shared-cart-consumer'],
+        queryFn: ({ signal }) => requestCart(session, signal),
+        enabled: subject !== null,
+      });
+      sharedCartStatus = cartQuery.status;
+      return null;
+    }
+    function RecoveryProbe() {
+      workflow = useCartCompositeCheckout([paidCourse]);
+      return null;
+    }
+    function TestApp({ showRecovery }: { showRecovery: boolean }) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          <SessionProvider client={client} tokenStore={store}>
+            <SessionCapture
+              onSession={(nextSession) => {
+                session = nextSession;
+              }}
+            />
+            <SharedCartConsumer />
+            {showRecovery ? <RecoveryProbe /> : null}
+          </SessionProvider>
+        </QueryClientProvider>
+      );
+    }
+    const view = render(<TestApp showRecovery />);
+
+    await waitFor(() => expect(workflow?.phase).toBe('idle'));
+    await waitFor(() => expect(cartRequests).toBe(1));
+    const epoch = capturedSession()?.cacheEpoch;
+    if (epoch === null || epoch === undefined)
+      throw new Error('Expected one authenticated cache epoch');
+    act(() => workflow?.discoverRecovery());
+    await waitFor(() => expect(workflow?.phase).toBe('discovering_recovery'));
+    view.rerender(<TestApp showRecovery={false} />);
+    expect(capturedSession()?.cacheEpoch).toBe(epoch);
+    expect(cartAborts).toBe(0);
+
+    await act(async () => {
+      cart.resolve(emptyCart());
+    });
+    await waitFor(() => expect(sharedCartStatus).toBe('success'));
+    expect(capturedSession()?.cacheEpoch).toBe(epoch);
+    expect(cartAborts).toBe(0);
+    view.unmount();
+  });
+
+  it('drops held discovery results after a session epoch changes', async () => {
+    const enrollments = deferred<ReturnType<typeof enrollmentList>>();
+    const cart = deferred<ReturnType<typeof emptyCart>>();
+    const request: ApiClient['request'] = async <TResponse, TBody>(
+      options: ApiRequestOptions<TBody, TResponse>,
+    ) => {
+      if (options.path === '/me') return decode(options, student);
+      if (options.path === '/enrollments/my') return decode(options, await enrollments.promise);
+      if (options.path === '/cart') return decode(options, await cart.promise);
+      throw new Error(`Unexpected request ${options.method} ${options.path}`);
+    };
+    const harness = createSessionHarness(request);
+    const { result } = renderHook(() => useCartCompositeCheckout([paidCourse]), {
+      wrapper: harness.Wrapper,
+    });
+
+    await waitFor(() => expect(harness.session()?.state.status).toBe('authenticated'));
+    const firstSubject = harness.session()?.cacheEpoch;
+    act(() => result.current.discoverRecovery());
+    await waitFor(() => expect(result.current.phase).toBe('discovering_recovery'));
+    act(() => harness.session()?.acceptAccessToken('replacement-token'));
+    await waitFor(() => {
+      expect(harness.session()?.cacheEpoch).not.toBe(firstSubject);
+      expect(result.current.phase).toBe('idle');
+      expect(result.current.recoveryCandidates).toEqual([]);
+    });
+
+    await act(async () => {
+      enrollments.resolve(enrollmentList());
+      cart.resolve(emptyCart());
+    });
+    expect(result.current.phase).toBe('idle');
+    expect(result.current.recoveryCandidates).toEqual([]);
   });
 
   it('test-owned recovery guard rejects an injected duplicate discovery read', () => {
@@ -917,6 +1137,328 @@ describe('useCartCompositeCheckout', () => {
     });
     await waitFor(() => expect(counts.restored).toBe(1));
     expect(counts).toEqual({ removed: 1, restored: 1, checkout: 0, payment: 0 });
+  });
+
+  it('does not compensate a retained course after a deferred isolation response belongs to a replaced session', async () => {
+    const isolatedCart = deferred<Response>();
+    const requests: Array<{ path: string; method: string; authorization: string | null }> = [];
+    let cartCourseIds = [7, 8];
+    let isolateRetry = false;
+    let enrollmentStatus: 'pending_payment' | 'cancelled' = 'pending_payment';
+    const fetchImplementation: typeof fetch = async (input, init) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? 'GET';
+      requests.push({
+        path: url.pathname,
+        method,
+        authorization: new Headers(init?.headers).get('Authorization'),
+      });
+      const json = (value: unknown) =>
+        new Response(JSON.stringify(value), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      if (url.pathname === '/me') return json(student);
+      if (url.pathname === '/cart/checkout') {
+        cartCourseIds = [];
+        return json({ message: 'acknowledged', enrolled_courses: 1 });
+      }
+      if (url.pathname === '/enrollments/my') return json(enrollmentList(enrollmentStatus));
+      if (url.pathname === '/cart/items/8') {
+        cartCourseIds = [7];
+        return new Response(null, { status: 204 });
+      }
+      if (url.pathname === '/cart' && method === 'GET') {
+        if (isolateRetry) return isolatedCart.promise;
+        return json({
+          ...emptyCart(),
+          items: cartCourseIds.map((courseId) => ({
+            id: courseId,
+            course_id: courseId,
+            added_at: '2026-01-01T00:00:00Z',
+            course: { id: courseId, title: `Course ${courseId}`, price: '9.99', currency: 'USD' },
+          })),
+          item_count: cartCourseIds.length,
+        });
+      }
+      if (url.pathname === '/cart/items' && method === 'POST') {
+        const courseId = (JSON.parse(String(init?.body)) as { course_id: number }).course_id;
+        cartCourseIds = [...cartCourseIds, courseId];
+        return json({
+          id: courseId,
+          course_id: courseId,
+          added_at: '2026-01-01T00:00:00Z',
+          course: { id: courseId, title: `Course ${courseId}`, price: '9.99', currency: 'USD' },
+        });
+      }
+      if (url.pathname === '/payments/complete') {
+        enrollmentStatus = 'cancelled';
+        return json({ enrollment_id: 70, status: enrollmentStatus, message: 'declined' });
+      }
+      throw new Error(`Unexpected request ${method} ${url.pathname}`);
+    };
+    const harness = createOwnedSessionHarness(fetchImplementation);
+    const courses = [paidCourse];
+    const hook = renderHook(() => useCartCompositeCheckout(courses), { wrapper: harness.Wrapper });
+
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    act(() => hook.result.current.start([{ courseId: 7, outcome: 'failed' }]));
+    await waitFor(() => expect(hook.result.current.phase).toBe('checkout_completed'));
+
+    courses.push(secondPaidCourse);
+    requests.length = 0;
+    cartCourseIds = [7, 8];
+    isolateRetry = true;
+    act(() => hook.result.current.retryRestoredCourse(7));
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        path: '/cart/items/8',
+        method: 'DELETE',
+        authorization: 'Bearer student-token',
+      }),
+    );
+    const oldEpoch = harness.session()?.cacheEpoch;
+    act(() => harness.session()?.acceptAccessToken('replacement-user-token'));
+    await waitFor(() => {
+      expect(harness.session()?.state.status).toBe('authenticated');
+      expect(harness.session()?.cacheEpoch).not.toBe(oldEpoch);
+      expect(requests).toContainEqual({
+        path: '/me',
+        method: 'GET',
+        authorization: 'Bearer replacement-user-token',
+      });
+    });
+    await act(async () => {
+      isolatedCart.resolve(
+        new Response(
+          JSON.stringify({
+            ...emptyCart(),
+            items: [
+              {
+                id: 7,
+                course_id: 7,
+                added_at: '2026-01-01T00:00:00Z',
+                course: { id: 7, title: 'Course 7', price: '19.99', currency: 'USD' },
+              },
+            ],
+            item_count: 1,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    });
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+
+    expect(
+      requests.filter((request) => request.path === '/cart/items' && request.method === 'POST'),
+    ).toEqual([]);
+    expect(requests).not.toContainEqual({
+      path: '/cart/items',
+      method: 'POST',
+      authorization: 'Bearer replacement-user-token',
+    });
+  });
+
+  it('guards every retained-course restore when logout happens between two compensation POSTs', async () => {
+    const isolatedCart = deferred<unknown>();
+    const firstRestore = deferred<unknown>();
+    const removedCourseIds: number[] = [];
+    const restoredCourseIds: number[] = [];
+    let cartCourseIds = [7, 8, 9];
+    let isolateRetry = false;
+    let enrollmentStatus: 'pending_payment' | 'cancelled' = 'pending_payment';
+    const request: ApiClient['request'] = async <TResponse, TBody>(
+      options: ApiRequestOptions<TBody, TResponse>,
+    ) => {
+      if (options.path === '/me') return decode(options, student);
+      if (options.path === '/cart/checkout') {
+        cartCourseIds = [];
+        return decode(options, { message: 'acknowledged', enrolled_courses: 1 });
+      }
+      if (options.path === '/enrollments/my')
+        return decode(options, enrollmentList(enrollmentStatus));
+      if (options.path.startsWith('/cart/items/')) {
+        const pathSegments = options.path.split('/');
+        const courseId = Number(pathSegments[pathSegments.length - 1]);
+        removedCourseIds.push(courseId);
+        cartCourseIds = cartCourseIds.filter((id) => id !== courseId);
+        return decode(options, undefined);
+      }
+      if (options.path === '/cart' && options.method === 'GET') {
+        if (isolateRetry) return decode(options, await isolatedCart.promise);
+        return decode(options, {
+          ...emptyCart(),
+          items: cartCourseIds.map((courseId) => ({
+            id: courseId,
+            course_id: courseId,
+            added_at: '2026-01-01T00:00:00Z',
+            course: { id: courseId, title: `Course ${courseId}`, price: '9.99', currency: 'USD' },
+          })),
+          item_count: cartCourseIds.length,
+        });
+      }
+      if (options.path === '/cart/items' && options.method === 'POST') {
+        const courseId = (options.body as { course_id: number }).course_id;
+        restoredCourseIds.push(courseId);
+        cartCourseIds = [...cartCourseIds, courseId];
+        if (courseId === 8) return decode(options, await firstRestore.promise);
+        return decode(options, {
+          id: courseId,
+          course_id: courseId,
+          added_at: '2026-01-01T00:00:00Z',
+          course: { id: courseId, title: `Course ${courseId}`, price: '9.99', currency: 'USD' },
+        });
+      }
+      if (options.path === '/payments/complete') {
+        enrollmentStatus = 'cancelled';
+        return decode(options, {
+          enrollment_id: 70,
+          status: enrollmentStatus,
+          message: 'declined',
+        });
+      }
+      throw new Error(`Unexpected request ${options.method} ${options.path}`);
+    };
+    const harness = createSessionHarness(request);
+    const courses = [paidCourse];
+    const hook = renderHook(() => useCartCompositeCheckout(courses), { wrapper: harness.Wrapper });
+
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    act(() => hook.result.current.start([{ courseId: 7, outcome: 'failed' }]));
+    await waitFor(() => expect(hook.result.current.phase).toBe('checkout_completed'));
+
+    courses.push(secondPaidCourse, thirdPaidCourse);
+    removedCourseIds.length = 0;
+    restoredCourseIds.length = 0;
+    cartCourseIds = [7, 8, 9];
+    isolateRetry = true;
+    act(() => hook.result.current.retryRestoredCourse(7));
+    await waitFor(() => expect(removedCourseIds).toEqual([8, 9]));
+    await act(async () => {
+      isolatedCart.resolve({
+        ...emptyCart(),
+        items: [
+          {
+            id: 7,
+            course_id: 7,
+            added_at: '2026-01-01T00:00:00Z',
+            course: { id: 7, title: 'Course 7', price: '19.99', currency: 'USD' },
+          },
+        ],
+        item_count: 1,
+      });
+    });
+    await waitFor(() => expect(restoredCourseIds).toEqual([8]));
+    act(() => harness.session()?.clearSession());
+    await waitFor(() => expect(harness.session()?.state.status).toBe('anonymous'));
+    await act(async () => {
+      firstRestore.resolve({
+        id: 8,
+        course_id: 8,
+        added_at: '2026-01-01T00:00:00Z',
+        course: { id: 8, title: 'Course 8', price: '9.99', currency: 'USD' },
+      });
+    });
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+
+    expect(removedCourseIds).toEqual([8, 9]);
+    expect(restoredCourseIds).toEqual([8]);
+  });
+
+  it('does not compensate after an expired session rejects a separate required request', async () => {
+    const isolatedCart = deferred<unknown>();
+    const counts = { removed: 0, restored: 0 };
+    let cartCourseIds = [7, 8];
+    let isolateRetry = false;
+    let enrollmentStatus: 'pending_payment' | 'cancelled' = 'pending_payment';
+    const request: ApiClient['request'] = async <TResponse, TBody>(
+      options: ApiRequestOptions<TBody, TResponse>,
+    ) => {
+      if (options.path === '/me') return decode(options, student);
+      if (options.path === '/session-expiry')
+        throw new ApiError({ kind: 'http', status: 401, message: 'expired' });
+      if (options.path === '/cart/checkout') {
+        cartCourseIds = [];
+        return decode(options, { message: 'acknowledged', enrolled_courses: 1 });
+      }
+      if (options.path === '/enrollments/my')
+        return decode(options, enrollmentList(enrollmentStatus));
+      if (options.path === '/cart/items/8') {
+        counts.removed += 1;
+        cartCourseIds = [7];
+        return decode(options, undefined);
+      }
+      if (options.path === '/cart' && options.method === 'GET') {
+        if (isolateRetry) return decode(options, await isolatedCart.promise);
+        return decode(options, {
+          ...emptyCart(),
+          items: cartCourseIds.map((courseId) => ({
+            id: courseId,
+            course_id: courseId,
+            added_at: '2026-01-01T00:00:00Z',
+            course: { id: courseId, title: `Course ${courseId}`, price: '9.99', currency: 'USD' },
+          })),
+          item_count: cartCourseIds.length,
+        });
+      }
+      if (options.path === '/cart/items' && options.method === 'POST') {
+        counts.restored += 1;
+        const courseId = (options.body as { course_id: number }).course_id;
+        cartCourseIds = [...cartCourseIds, courseId];
+        return decode(options, {
+          id: courseId,
+          course_id: courseId,
+          added_at: '2026-01-01T00:00:00Z',
+          course: { id: courseId, title: `Course ${courseId}`, price: '9.99', currency: 'USD' },
+        });
+      }
+      if (options.path === '/payments/complete') {
+        enrollmentStatus = 'cancelled';
+        return decode(options, {
+          enrollment_id: 70,
+          status: enrollmentStatus,
+          message: 'declined',
+        });
+      }
+      throw new Error(`Unexpected request ${options.method} ${options.path}`);
+    };
+    const harness = createSessionHarness(request);
+    const courses = [paidCourse];
+    const hook = renderHook(() => useCartCompositeCheckout(courses), { wrapper: harness.Wrapper });
+
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+    act(() => hook.result.current.start([{ courseId: 7, outcome: 'failed' }]));
+    await waitFor(() => expect(hook.result.current.phase).toBe('checkout_completed'));
+    courses.push(secondPaidCourse);
+    counts.removed = 0;
+    counts.restored = 0;
+    cartCourseIds = [7, 8];
+    isolateRetry = true;
+    act(() => hook.result.current.retryRestoredCourse(7));
+    await waitFor(() => expect(counts.removed).toBe(1));
+    await act(async () => {
+      await expect(
+        harness.session()?.requestRequired({ method: 'GET', path: '/session-expiry' }),
+      ).rejects.toMatchObject({ status: 401 });
+    });
+    await waitFor(() => expect(harness.session()?.state.status).toBe('anonymous'));
+    await act(async () => {
+      isolatedCart.resolve({
+        ...emptyCart(),
+        items: [
+          {
+            id: 7,
+            course_id: 7,
+            added_at: '2026-01-01T00:00:00Z',
+            course: { id: 7, title: 'Course 7', price: '19.99', currency: 'USD' },
+          },
+        ],
+        item_count: 1,
+      });
+    });
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'));
+
+    expect(counts).toEqual({ removed: 1, restored: 0 });
   });
 
   it('reconciles a malformed completion once and persists unknown without another payment or restore write', async () => {

@@ -2,13 +2,22 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAppQueryClient } from '../../src/app/query';
-import { SessionProvider, type AccessTokenStore } from '../../src/features/auth-session';
+import {
+  SessionProvider,
+  useSession,
+  type AccessTokenStore,
+} from '../../src/features/auth-session';
 import { InstructorLessonEditorPage } from '../../src/pages/instructor-lesson-editor-page';
 import { ApiError, type ApiClient, type ApiRequestOptions } from '../../src/shared/api';
+import {
+  instructorCourseQueryKey,
+  instructorLessonQueryKey,
+  type SessionCacheEpoch,
+} from '../../src/shared/api/query-keys';
 import { LocaleProvider, useLocale, type Locale } from '../../src/shared/locale';
 
 const instructor = {
@@ -61,6 +70,28 @@ function LocaleTestControl({ locale }: LocaleTestControlProps) {
   );
 }
 
+function LessonRouteTestControl() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Open lesson 8"
+        onClick={() => navigate('/instructor/lessons/8/edit')}
+      >
+        Open lesson 8
+      </button>
+      <button
+        type="button"
+        aria-label="Open lesson 9"
+        onClick={() => navigate('/instructor/lessons/9/edit')}
+      >
+        Open lesson 9
+      </button>
+    </>
+  );
+}
+
 async function setTestLocale(locale: Locale) {
   await userEvent
     .setup()
@@ -80,6 +111,7 @@ async function renderPage(
   queryClient: QueryClient = createAppQueryClient(),
   locale: Locale = 'en',
   initialEntry = '/instructor/lessons/8/edit',
+  sessionEpochRef?: SessionEpochRef,
 ) {
   await act(async () => {
     render(
@@ -89,7 +121,9 @@ async function renderPage(
           <LocaleTestControl locale="ru" />
           <LocaleTestControl locale="uz" />
           <SessionProvider client={client} tokenStore={tokenStore}>
+            {sessionEpochRef ? <SessionEpochProbe epochRef={sessionEpochRef} /> : null}
             <MemoryRouter initialEntries={[initialEntry]}>
+              <LessonRouteTestControl />
               <Routes>
                 <Route
                   path="/instructor/lessons/:lessonId/edit"
@@ -103,6 +137,21 @@ async function renderPage(
     );
   });
   return queryClient;
+}
+
+interface SessionEpochRef {
+  current: SessionCacheEpoch | null;
+}
+
+function SessionEpochProbe({ epochRef }: { readonly epochRef: SessionEpochRef }) {
+  const { cacheEpoch } = useSession();
+  if (cacheEpoch) epochRef.current = cacheEpoch;
+  return null;
+}
+
+function capturedSessionEpoch(epochRef: SessionEpochRef): SessionCacheEpoch {
+  expect(epochRef.current).toEqual(expect.any(String));
+  return epochRef.current!;
 }
 
 async function settleQueryClient(queryClient: QueryClient): Promise<void> {
@@ -223,21 +272,35 @@ describe('InstructorLessonEditorPage', () => {
       releasePatch = resolve;
     });
     let patchRequests = 0;
-    let persistedLesson = lesson;
+    let lessonRequests = 0;
+    const mutationResponse = { ...lesson, title: 'Mutation response title' };
+    const refetchedLesson = {
+      ...lesson,
+      title: 'Refetched normalized lesson',
+      description: 'Refetched normalized description',
+    };
     const request: ApiClient['request'] = async (options) => {
       if (options.path === '/me') return decode(options, instructor);
       if (options.path === '/lessons/8' && options.method === 'GET') {
-        return decode(options, persistedLesson);
+        lessonRequests += 1;
+        return decode(options, lessonRequests === 1 ? lesson : refetchedLesson);
       }
       if (options.path === '/lessons/8' && options.method === 'PATCH') {
         patchRequests += 1;
         await patchGate;
-        persistedLesson = { ...persistedLesson, title: 'Updated lesson' };
-        return decode(options, persistedLesson);
+        return decode(options, mutationResponse);
       }
       throw new Error(`Unexpected request: ${options.method} ${options.path}`);
     };
-    const queryClient = await renderPage({ request });
+    const sessionEpochRef: SessionEpochRef = { current: null };
+    const queryClient = await renderPage(
+      { request },
+      createAppQueryClient(),
+      'en',
+      '/instructor/lessons/8/edit',
+      sessionEpochRef,
+    );
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     await screen.findByRole('textbox', { name: 'Lesson title' });
     const lessonTitle = screen.getByRole('textbox', { name: 'Lesson title' });
     const user = userEvent.setup();
@@ -270,6 +333,16 @@ describe('InstructorLessonEditorPage', () => {
     });
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Save lesson' })).toBeNull());
     expect(screen.getByRole('status').textContent).toContain('All changes saved');
+    await waitFor(() => expect(lessonRequests).toBe(2));
+    const epoch = capturedSessionEpoch(sessionEpochRef);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: instructorLessonQueryKey(epoch, 8) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: instructorCourseQueryKey(epoch, 7) });
+    expect((screen.getByRole('textbox', { name: 'Lesson title' }) as HTMLInputElement).value).toBe(
+      'Refetched normalized lesson',
+    );
+    expect(
+      (screen.getByRole('textbox', { name: 'Description' }) as HTMLTextAreaElement).value,
+    ).toBe('Refetched normalized description');
   });
 
   it('starts status observation from the accepted acknowledgement without rendering unsupported media controls', async () => {
@@ -317,10 +390,10 @@ describe('InstructorLessonEditorPage', () => {
     expect(screen.queryByLabelText('Lesson file')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Upload file' })).toBeNull();
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ['instructor-course-editor', expect.any(String), 'lesson', 8],
+      queryKey: instructorLessonQueryKey(expect.any(String), 8),
     });
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ['instructor-course-editor', expect.any(String), 'course', 7],
+      queryKey: instructorCourseQueryKey(expect.any(String), 7),
     });
   });
 
@@ -723,5 +796,203 @@ describe('InstructorLessonEditorPage', () => {
     expect(await screen.findByText('Dars fayli kiritilishi shart.')).toBeTruthy();
     expect(screen.getByLabelText('Dars fayli').getAttribute('aria-invalid')).toBe('true');
     expect(screen.getByRole('button', { name: 'Faylni yuklash' })).toBeTruthy();
+  });
+
+  it('keeps a dirty lesson title and description when an upload invalidation refetches new media metadata', async () => {
+    let lessonRequestCount = 0;
+    const queryClient = createAppQueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const request: ApiClient['request'] = async (options) => {
+      if (options.path === '/me') return decode(options, instructor);
+      if (options.path === '/lessons/8' && options.method === 'GET') {
+        lessonRequestCount += 1;
+        return decode(options, {
+          ...lesson,
+          description: lessonRequestCount === 1 ? 'Original description' : 'Server media refreshed',
+          download_url:
+            lessonRequestCount === 1 ? '/unrendered.mp4' : '/media/lessons/processed.mp4',
+          updated_at: `2026-09-17T00:00:0${lessonRequestCount}Z`,
+        });
+      }
+      if (options.path === '/lessons/8/upload-file' && options.method === 'POST')
+        return decode(options, uploadAcknowledgement);
+      if (options.path === '/lessons/uploads/0123456789abcdef0123456789abcdef/status')
+        return decode(options, {
+          upload_id: '0123456789abcdef0123456789abcdef',
+          lesson_id: 8,
+          status: 'queued',
+          failure_reason: null,
+          updated_at: '2026-09-17T00:00:00Z',
+        });
+      throw new Error(`Unexpected request: ${options.method} ${options.path}`);
+    };
+    const sessionEpochRef: SessionEpochRef = { current: null };
+    await renderPage({ request }, queryClient, 'en', '/instructor/lessons/8/edit', sessionEpochRef);
+    const user = userEvent.setup();
+    const title = (await screen.findByRole('textbox', {
+      name: 'Lesson title',
+    })) as HTMLInputElement;
+    const description = screen.getByRole('textbox', { name: 'Description' }) as HTMLTextAreaElement;
+    await act(async () => {
+      await user.clear(title);
+      await user.type(title, 'Unsaved lesson title');
+      await user.clear(description);
+      await user.type(description, 'Unsaved lesson description');
+    });
+    fireEvent.change(screen.getByLabelText('Lesson file'), {
+      target: { files: [new File(['video'], 'lesson.mp4', { type: 'video/mp4' })] },
+    });
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Upload file' }));
+    });
+
+    await waitFor(() => expect(lessonRequestCount).toBeGreaterThan(1));
+    const epoch = capturedSessionEpoch(sessionEpochRef);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: instructorLessonQueryKey(epoch, 8) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: instructorCourseQueryKey(epoch, 7) });
+    expect(title.value).toBe('Unsaved lesson title');
+    expect(description.value).toBe('Unsaved lesson description');
+    expect(await screen.findByText('Queued')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Load video' })).toBeTruthy();
+  });
+
+  it('keeps the returned A draft and baseline clear when an old A save fails after A to B to A', async () => {
+    let rejectOldSave: (reason: unknown) => void = () => {};
+    const oldSave = new Promise<never>((_resolve, reject) => {
+      rejectOldSave = reject;
+    });
+    let lessonEightRequests = 0;
+    const request: ApiClient['request'] = async (options) => {
+      if (options.path === '/me') return decode(options, instructor);
+      if (options.path === '/lessons/8' && options.method === 'GET') {
+        lessonEightRequests += 1;
+        return decode(options, {
+          ...lesson,
+          title: lessonEightRequests === 1 ? 'Initial A baseline' : 'Returned A baseline',
+        });
+      }
+      if (options.path === '/lessons/9' && options.method === 'GET')
+        return decode(options, { ...lesson, id: 9, title: 'B baseline' });
+      if (options.path === '/lessons/8' && options.method === 'PATCH')
+        return decode(options, await oldSave);
+      throw new Error(`Unexpected request: ${options.method} ${options.path}`);
+    };
+    await renderPage({ request });
+    const user = userEvent.setup();
+    const title = (await screen.findByRole('textbox', {
+      name: 'Lesson title',
+    })) as HTMLInputElement;
+    await act(async () => {
+      await user.clear(title);
+    });
+    await act(async () => {
+      await user.type(title, 'Old A save draft');
+    });
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Save lesson' }));
+    });
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Open lesson 9' }));
+    });
+    await screen.findByDisplayValue('B baseline');
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Open lesson 8' }));
+    });
+    const returnedTitle = (await screen.findByDisplayValue(
+      'Returned A baseline',
+    )) as HTMLInputElement;
+    await act(async () => {
+      await user.clear(returnedTitle);
+    });
+    await act(async () => {
+      await user.type(returnedTitle, 'Returned A draft');
+    });
+
+    await act(async () => {
+      rejectOldSave(
+        new ApiError({
+          kind: 'validation',
+          status: 422,
+          message: 'PRIVATE_OLD_A_SAVE_FAILURE',
+          issues: [],
+        }),
+      );
+    });
+
+    expect(returnedTitle.value).toBe('Returned A draft');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('PRIVATE_OLD_A_SAVE_FAILURE')).toBeNull();
+  });
+
+  it('keeps the returned A draft and file while an old A upload acknowledgement cannot start its observer', async () => {
+    let resolveOldUpload: (value: typeof uploadAcknowledgement) => void = () => {};
+    const oldUpload = new Promise<typeof uploadAcknowledgement>((resolve) => {
+      resolveOldUpload = resolve;
+    });
+    const statusRequests: ApiRequestOptions[] = [];
+    let lessonEightRequests = 0;
+    const request: ApiClient['request'] = async (options) => {
+      if (options.path === '/me') return decode(options, instructor);
+      if (options.path === '/lessons/8' && options.method === 'GET') {
+        lessonEightRequests += 1;
+        return decode(options, {
+          ...lesson,
+          title: lessonEightRequests === 1 ? 'Initial A baseline' : 'Returned A baseline',
+        });
+      }
+      if (options.path === '/lessons/9' && options.method === 'GET')
+        return decode(options, { ...lesson, id: 9, title: 'B baseline' });
+      if (options.path === '/lessons/8/upload-file' && options.method === 'POST')
+        return decode(options, await oldUpload);
+      if (options.path.includes('/status')) {
+        statusRequests.push(options);
+        return decode(options, {
+          upload_id: uploadAcknowledgement.upload_id,
+          lesson_id: 8,
+          status: 'queued',
+          failure_reason: null,
+          updated_at: '2026-09-17T00:00:00Z',
+        });
+      }
+      throw new Error(`Unexpected request: ${options.method} ${options.path}`);
+    };
+    await renderPage({ request });
+    const user = userEvent.setup();
+    fireEvent.change(await screen.findByLabelText('Lesson file'), {
+      target: { files: [new File(['old'], 'old-a.mp4', { type: 'video/mp4' })] },
+    });
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Upload file' }));
+    });
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Open lesson 9' }));
+    });
+    await screen.findByDisplayValue('B baseline');
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Open lesson 8' }));
+    });
+    const returnedTitle = (await screen.findByDisplayValue(
+      'Returned A baseline',
+    )) as HTMLInputElement;
+    await act(async () => {
+      await user.clear(returnedTitle);
+    });
+    await act(async () => {
+      await user.type(returnedTitle, 'Returned A draft');
+    });
+    fireEvent.change(screen.getByLabelText('Lesson file'), {
+      target: { files: [new File(['returned'], 'returned-a.mp4', { type: 'video/mp4' })] },
+    });
+
+    await act(async () => {
+      resolveOldUpload(uploadAcknowledgement);
+    });
+
+    expect(returnedTitle.value).toBe('Returned A draft');
+    expect(screen.getByText('returned-a.mp4')).toBeTruthy();
+    expect(screen.queryByText('Queued')).toBeNull();
+    expect(statusRequests).toHaveLength(0);
   });
 });

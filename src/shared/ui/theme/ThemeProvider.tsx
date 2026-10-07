@@ -39,9 +39,11 @@ interface DocumentDensityOwnerRegistration {
   readonly owner: symbol;
 }
 
-type DensityOwnedDocument = Document & {
-  [DOCUMENT_DENSITY_OWNER_KEY]?: DocumentDensityOwnerRegistration;
-};
+type DocumentDensityOwnerRegistry = Partial<
+  Record<typeof DOCUMENT_DENSITY_OWNER_KEY, DocumentDensityOwnerRegistration>
+>;
+
+type DensityOwnedDocument = Document & DocumentDensityOwnerRegistry;
 
 ThemeContext.displayName = 'ThemeContext';
 

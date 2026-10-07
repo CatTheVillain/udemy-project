@@ -2,18 +2,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import { ChevronLeft, CircleCheck, FileText, UploadCloud } from 'lucide-react';
 
 import type { LessonType } from '@entities/course';
 import {
-  instructorEditorCourseQueryKey,
   instructorEditorLessonQueryKey,
   createInstructorLessonUploadStatusObserver,
+  getInstructorLessonUploadRule,
+  isInstructorLessonUploadFileAccepted,
   mapInstructorEditorFormFailure,
   resolveInstructorEditorFailureMessage,
   resolveInstructorEditorFormFailure,
   requestInstructorEditorLesson,
+  parseInstructorEditorId,
   updateInstructorLesson,
   uploadInstructorLessonFile,
   type InstructorLessonUploadObservation,
@@ -24,6 +25,7 @@ import {
 } from '@features/instructor-course-editor';
 import { LessonMediaAccess } from '@features/media-access';
 import { useSession } from '@features/auth-session';
+import { instructorCourseQueryKey, instructorLessonQueryKey } from '@shared/api/query-keys';
 import {
   Button,
   ContextualNavigationLink,
@@ -39,10 +41,19 @@ import styles from './InstructorLessonEditorPage.module.css';
 
 interface LessonFormState extends UpdateInstructorLessonInput {}
 
-interface UploadRule {
-  readonly accept: string;
-  readonly description: string;
-  readonly maxBytes: number;
+interface LessonEditAttempt {
+  readonly identity: string;
+  readonly generation: number;
+  readonly lessonId: number;
+  readonly form: LessonFormState;
+  readonly baseline: LessonFormState | null;
+}
+
+interface LessonUploadAttempt {
+  readonly identity: string;
+  readonly generation: number;
+  readonly lessonId: number;
+  readonly courseId: number | undefined;
 }
 
 function lessonErrorFields() {
@@ -58,39 +69,36 @@ function uploadErrorFields() {
   return { file: { field: 'file', labelKey: 'lessonEditorLessonFile' } };
 }
 
-function positiveInteger(value: string | undefined): number | null {
-  if (!value || !/^\d+$/u.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+function lessonFormState(lesson: {
+  readonly title: string;
+  readonly lessonType: LessonType;
+  readonly description: string | null;
+  readonly isPublished: boolean;
+}): LessonFormState {
+  return {
+    title: lesson.title,
+    lessonType: lesson.lessonType,
+    description: lesson.description ?? '',
+    isPublished: lesson.isPublished,
+  };
 }
 
-function uploadRule(type: LessonType, t: TFunction): UploadRule | null {
-  if (type === 'video')
-    return {
-      accept: '.mp4,.webm,.mov',
-      maxBytes: 150 * 1024 * 1024,
-      description: t('instructor:lessonEditorMp4WebmOrMovUpTo150Mb'),
-    };
-  if (type === 'pdf')
-    return {
-      accept: '.pdf',
-      maxBytes: 50 * 1024 * 1024,
-      description: t('instructor:lessonEditorPdfUpTo50Mb'),
-    };
-  return null;
-}
-
-function fileMatchesUploadRule(file: File, rule: UploadRule | null): boolean {
-  if (rule === null) return false;
-  const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
-  return rule.accept.split(',').includes(extension) && file.size <= rule.maxBytes;
+function sameLessonForm(left: LessonFormState | null, right: LessonFormState | null): boolean {
+  return (
+    left !== null &&
+    right !== null &&
+    left.title === right.title &&
+    left.lessonType === right.lessonType &&
+    left.description === right.description &&
+    left.isPublished === right.isPublished
+  );
 }
 
 export function InstructorLessonEditorPage() {
   const { t } = useTranslation();
   const formErrorFields = lessonErrorFields();
   const fileErrorFields = uploadErrorFields();
-  const lessonId = positiveInteger(useParams().lessonId);
+  const lessonId = parseInstructorEditorId(useParams().lessonId);
   const session = useSession();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<LessonFormState | null>(null);
@@ -103,6 +111,13 @@ export function InstructorLessonEditorPage() {
   const [uploadObservation, setUploadObservation] =
     useState<InstructorLessonUploadObservation | null>(null);
   const uploadObserverRef = useRef<InstructorLessonUploadStatusObserver | null>(null);
+  const formRef = useRef<LessonFormState | null>(null);
+  const baselineRef = useRef<LessonFormState | null>(null);
+  const hydratedIdentityRef = useRef<string | null>(null);
+  const activeIdentityRef = useRef('');
+  const activeGenerationRef = useRef(0);
+  const uploadIdentityRef = useRef<string | null>(null);
+  const uploadGenerationRef = useRef<number | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const lessonTypeRef = useRef<HTMLButtonElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -110,44 +125,94 @@ export function InstructorLessonEditorPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const formErrorRef = useRef<HTMLDivElement>(null);
   const uploadErrorRef = useRef<HTMLDivElement>(null);
+  const cacheEpoch = session.cacheEpoch ?? null;
   const lesson = useQuery({
-    queryKey: instructorEditorLessonQueryKey(session.cacheEpoch, lessonId ?? 0),
+    queryKey:
+      cacheEpoch !== null && lessonId !== null
+        ? instructorEditorLessonQueryKey(cacheEpoch, lessonId)
+        : ['disabled', 'instructor-lesson-editor'],
     queryFn: ({ signal }) => requestInstructorEditorLesson(session, lessonId as number, signal),
-    enabled: lessonId !== null,
+    enabled: cacheEpoch !== null && lessonId !== null,
   });
+  const editIdentity = `${session.cacheEpoch ?? 'anonymous'}:${lessonId ?? 'invalid'}`;
+  if (activeIdentityRef.current !== editIdentity) {
+    activeIdentityRef.current = editIdentity;
+    activeGenerationRef.current += 1;
+  }
+  const activeGeneration = activeGenerationRef.current;
+  const isCurrentAttempt = (attempt: LessonEditAttempt | LessonUploadAttempt) =>
+    activeIdentityRef.current === attempt.identity &&
+    activeGenerationRef.current === attempt.generation &&
+    lessonId === attempt.lessonId;
   useEffect(() => {
+    if (hydratedIdentityRef.current !== editIdentity) {
+      hydratedIdentityRef.current = editIdentity;
+      baselineRef.current = null;
+      formRef.current = null;
+      setForm(null);
+      uploadObserverRef.current?.dispose();
+      uploadObserverRef.current = null;
+      setFile(null);
+      setFormFailure(null);
+      setUploadFailure(null);
+      setUploadReference(null);
+      setUploadObservation(null);
+      uploadIdentityRef.current = null;
+      uploadGenerationRef.current = null;
+      if (fileRef.current) fileRef.current.value = '';
+    }
     if (!lesson.data) return;
-    setForm({
-      title: lesson.data.title,
-      lessonType: lesson.data.lessonType,
-      description: lesson.data.description ?? '',
-      isPublished: lesson.data.isPublished,
+    const nextBaseline = lessonFormState(lesson.data);
+    const currentForm = formRef.current;
+    const wasClean = sameLessonForm(currentForm, baselineRef.current);
+    baselineRef.current = nextBaseline;
+    if (currentForm === null || wasClean) {
+      formRef.current = nextBaseline;
+      setForm(nextBaseline);
+    }
+  }, [editIdentity, lesson.data]);
+  const refresh = async (courseId: number, attempt: LessonEditAttempt | LessonUploadAttempt) => {
+    if (!isCurrentAttempt(attempt)) return;
+    if (cacheEpoch === null) return;
+    await queryClient.invalidateQueries({
+      queryKey: instructorLessonQueryKey(cacheEpoch, attempt.lessonId),
     });
-  }, [lesson.data]);
-  const refresh = (courseId: number) =>
-    lessonId === null
-      ? Promise.resolve()
-      : Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: instructorEditorLessonQueryKey(session.cacheEpoch, lessonId),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: instructorEditorCourseQueryKey(session.cacheEpoch, courseId),
-          }),
-        ]);
+    if (!isCurrentAttempt(attempt)) return;
+    await queryClient.invalidateQueries({
+      queryKey: instructorCourseQueryKey(cacheEpoch, courseId),
+    });
+  };
   const update = useMutation({
     mutationFn: () => {
       if (lessonId === null || form === null) throw new Error('Lesson form is unavailable');
       return updateInstructorLesson(session, lessonId, form);
     },
-    onSuccess: async (updatedLesson) => {
+    onMutate: (): LessonEditAttempt | undefined => {
+      if (lessonId === null || formRef.current === null) return undefined;
+      return {
+        identity: editIdentity,
+        generation: activeGeneration,
+        lessonId,
+        form: formRef.current,
+        baseline: baselineRef.current,
+      };
+    },
+    onSuccess: async (updatedLesson, _variables, attempt) => {
+      if (attempt === undefined || !isCurrentAttempt(attempt)) return;
       setFormFailure(null);
-      if (updatedLesson.lessonType !== lesson.data?.lessonType) {
+      const normalizedForm = lessonFormState(updatedLesson);
+      const currentForm = formRef.current;
+      baselineRef.current = normalizedForm;
+      if (sameLessonForm(currentForm, attempt.form)) {
+        formRef.current = normalizedForm;
+        setForm(normalizedForm);
+      }
+      if (updatedLesson.lessonType !== attempt.baseline?.lessonType) {
         uploadObserverRef.current?.dispose();
         uploadObserverRef.current = null;
         setUploadReference(null);
         setUploadObservation(null);
-        const nextRule = uploadRule(updatedLesson.lessonType, t);
+        const nextRule = getInstructorLessonUploadRule(updatedLesson.lessonType);
         setFile(null);
         if (fileRef.current) fileRef.current.value = '';
         if (nextRule) {
@@ -162,9 +227,10 @@ export function InstructorLessonEditorPage() {
       } else {
         setUploadFailure(null);
       }
-      await refresh(updatedLesson.courseId);
+      await refresh(updatedLesson.courseId, attempt);
     },
-    onError: (error) => {
+    onError: (error, _variables, attempt) => {
+      if (attempt === undefined || !isCurrentAttempt(attempt)) return;
       const failure = mapInstructorEditorFormFailure(
         error,
         {
@@ -184,14 +250,21 @@ export function InstructorLessonEditorPage() {
       if (lessonId === null || file === null) throw new Error('Choose a file first');
       return uploadInstructorLessonFile(session, lessonId, file);
     },
-    onMutate: () => {
+    onMutate: (): LessonUploadAttempt | undefined => {
+      if (lessonId === null) return undefined;
       uploadObserverRef.current?.dispose();
       uploadObserverRef.current = null;
       setUploadReference(null);
       setUploadObservation(null);
-      return lesson.data?.courseId;
+      return {
+        identity: editIdentity,
+        generation: activeGeneration,
+        lessonId,
+        courseId: lesson.data?.courseId,
+      };
     },
-    onSuccess: async (acknowledgement, _variables, courseId) => {
+    onSuccess: async (acknowledgement, _variables, attempt) => {
+      if (attempt === undefined || !isCurrentAttempt(attempt)) return;
       setUploadFailure(null);
       setFile(null);
       if (fileRef.current) fileRef.current.value = '';
@@ -199,10 +272,13 @@ export function InstructorLessonEditorPage() {
         lessonId: acknowledgement.lessonId,
         uploadId: acknowledgement.uploadId,
       });
+      uploadIdentityRef.current = attempt.identity;
+      uploadGenerationRef.current = attempt.generation;
       setUploadObservation('queued');
-      if (courseId !== undefined) await refresh(courseId);
+      if (attempt.courseId !== undefined) await refresh(attempt.courseId, attempt);
     },
-    onError: (error) => {
+    onError: (error, _variables, attempt) => {
+      if (attempt === undefined || !isCurrentAttempt(attempt)) return;
       const failure = mapInstructorEditorFormFailure(
         error,
         {
@@ -244,11 +320,18 @@ export function InstructorLessonEditorPage() {
       return;
     }
     let observer: InstructorLessonUploadStatusObserver | null = null;
+    const observerGeneration = activeGenerationRef.current;
     observer = createInstructorLessonUploadStatusObserver({
       session,
       reference: uploadReference,
       onStatus: (nextObservation) => {
-        if (uploadObserverRef.current === observer) setUploadObservation(nextObservation);
+        if (
+          uploadObserverRef.current === observer &&
+          uploadIdentityRef.current === activeIdentityRef.current &&
+          uploadGenerationRef.current === observerGeneration &&
+          activeGenerationRef.current === observerGeneration
+        )
+          setUploadObservation(nextObservation);
       },
     });
     uploadObserverRef.current = observer;
@@ -294,7 +377,7 @@ export function InstructorLessonEditorPage() {
       </Notice>
     );
   if (!lesson.data || !form) return null;
-  const rule = uploadRule(lesson.data.lessonType, t);
+  const rule = getInstructorLessonUploadRule(lesson.data.lessonType);
   const resolvedFormFailure = formFailure
     ? resolveInstructorEditorFormFailure(formFailure, t)
     : null;
@@ -319,7 +402,7 @@ export function InstructorLessonEditorPage() {
       setFile(null);
       return;
     }
-    if (!fileMatchesUploadRule(next, rule)) {
+    if (!isInstructorLessonUploadFileAccepted(next, lesson.data.lessonType)) {
       setFile(null);
       const descriptor = {
         kind: 'resource',
@@ -342,7 +425,7 @@ export function InstructorLessonEditorPage() {
       setUploadFailure({ fields: { file: descriptor }, summary: descriptor });
       return;
     }
-    if (!fileMatchesUploadRule(file, rule)) {
+    if (!isInstructorLessonUploadFileAccepted(file, lesson.data.lessonType)) {
       setFile(null);
       if (fileRef.current) fileRef.current.value = '';
       const descriptor = {
@@ -356,12 +439,7 @@ export function InstructorLessonEditorPage() {
     upload.mutate();
   };
   const hasUnsavedChanges =
-    form !== null &&
-    lesson.data !== undefined &&
-    (form.title !== lesson.data.title ||
-      form.lessonType !== lesson.data.lessonType ||
-      form.description !== (lesson.data.description ?? '') ||
-      form.isPublished !== lesson.data.isPublished);
+    form !== null && lesson.data !== undefined && !sameLessonForm(form, baselineRef.current);
   const savedContentTitle =
     lesson.data.lessonType === 'video'
       ? t('learning:lessonVideoPreview')
@@ -392,7 +470,11 @@ export function InstructorLessonEditorPage() {
             required
             value={form.title}
             error={resolvedFormFailure?.fields.title}
-            onChange={(event) => setForm({ ...form, title: event.target.value })}
+            onChange={(event) => {
+              const nextForm = { ...form, title: event.target.value };
+              formRef.current = nextForm;
+              setForm(nextForm);
+            }}
           />
           <Select
             ref={lessonTypeRef}
@@ -401,7 +483,9 @@ export function InstructorLessonEditorPage() {
             value={form.lessonType}
             error={resolvedFormFailure?.fields.lessonType}
             onValueChange={(value) => {
-              setForm({ ...form, lessonType: value as LessonType });
+              const nextForm = { ...form, lessonType: value as LessonType };
+              formRef.current = nextForm;
+              setForm(nextForm);
             }}
           >
             <option value="video">{t('instructor:courseEditorVideo')}</option>
@@ -414,7 +498,11 @@ export function InstructorLessonEditorPage() {
             name="description"
             value={form.description}
             error={resolvedFormFailure?.fields.description}
-            onChange={(event) => setForm({ ...form, description: event.target.value })}
+            onChange={(event) => {
+              const nextForm = { ...form, description: event.target.value };
+              formRef.current = nextForm;
+              setForm(nextForm);
+            }}
           />
           <label className={styles.checkbox}>
             <input
@@ -426,7 +514,11 @@ export function InstructorLessonEditorPage() {
               aria-describedby={
                 formFailure?.fields.isPublished ? 'edit-lesson-is-published-error' : undefined
               }
-              onChange={(event) => setForm({ ...form, isPublished: event.target.checked })}
+              onChange={(event) => {
+                const nextForm = { ...form, isPublished: event.target.checked };
+                formRef.current = nextForm;
+                setForm(nextForm);
+              }}
             />{' '}
             {t('instructor:courseEditorPublishThisLesson')}
           </label>
@@ -490,7 +582,7 @@ export function InstructorLessonEditorPage() {
                   {t('instructor:lessonEditorUploadLessonFile')}
                 </span>
                 <span id="lesson-upload-file-help" className={styles.uploadHelp}>
-                  {rule.description}
+                  {t(rule.descriptionKey)}
                 </span>
                 {file ? <span className={styles.fileName}>{file.name}</span> : null}
               </div>

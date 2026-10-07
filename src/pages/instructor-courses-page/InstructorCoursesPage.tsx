@@ -18,7 +18,11 @@ import {
 } from '@features/instructor-courses';
 import { deleteInstructorCourse } from '@features/instructor-course-editor';
 import { useSession } from '@features/auth-session';
-import { ApiError } from '@shared/api';
+import { ApiError, type SessionCacheEpoch } from '@shared/api';
+import {
+  instructorCourseCollectionQueryKey,
+  instructorCourseCollectionQueryPrefix,
+} from '@shared/api/query-keys';
 import {
   Button,
   DestructiveConfirmation,
@@ -88,20 +92,43 @@ export function InstructorCoursesPage() {
   const courseMenuRef = useRef<HTMLDivElement>(null);
   const courseMenuTriggerRefs = useRef(new Map<number, HTMLButtonElement>());
   const pendingCourseMenuFocusRef = useRef<CourseMenuFocusTarget | null>(null);
+  const isCreateSubmissionPendingRef = useRef(false);
   const page = pageFrom(params.get('page'));
+  const cacheEpoch = session.cacheEpoch ?? null;
+  const previousCacheEpochRef = useRef<SessionCacheEpoch | null>(null);
+  const cacheEpochRef = useRef<SessionCacheEpoch | null>(null);
+  if (cacheEpoch !== null) previousCacheEpochRef.current = cacheEpoch;
+  cacheEpochRef.current = cacheEpoch;
+  const queryEpoch = cacheEpoch ?? previousCacheEpochRef.current;
   const collection = useQuery({
-    queryKey: ['instructor-courses', session.cacheEpoch ?? null, page],
+    queryKey:
+      queryEpoch !== null
+        ? instructorCourseCollectionQueryKey(queryEpoch, page)
+        : ['disabled', 'instructor-courses'],
     queryFn: ({ signal }) => requestInstructorCourses(session, page, signal),
+    enabled: cacheEpoch !== null,
   });
+  const disabledCollectionError =
+    cacheEpoch === null && queryEpoch !== null
+      ? queryClient.getQueryState(instructorCourseCollectionQueryKey(queryEpoch, page))?.error
+      : null;
+  const collectionError = collection.isError ? collection.error : disabledCollectionError;
+  const hasCollectionError = collectionError !== null && collectionError !== undefined;
   const create = useMutation({
     mutationFn: () => requestCreateCourse(session, { title: title.trim() }),
     onSuccess: () => {
       setTitle('');
       setTitleError(null);
       setIsCreateOpen(false);
-      return queryClient.invalidateQueries({
-        queryKey: ['instructor-courses', session.cacheEpoch ?? null],
-      });
+      const currentEpoch = cacheEpochRef.current;
+      return currentEpoch === null
+        ? Promise.resolve()
+        : queryClient.invalidateQueries({
+            queryKey: instructorCourseCollectionQueryPrefix(currentEpoch),
+          });
+    },
+    onSettled: () => {
+      isCreateSubmissionPendingRef.current = false;
     },
   });
   const createdCourse = create.data;
@@ -110,9 +137,11 @@ export function InstructorCoursesPage() {
     mutationFn: (target: CourseDeleteTarget) => deleteInstructorCourse(session, target.id),
     onSuccess: async () => {
       setDeleteTarget(null);
-      await queryClient.invalidateQueries({
-        queryKey: ['instructor-courses', session.cacheEpoch ?? null],
-      });
+      const currentEpoch = cacheEpochRef.current;
+      if (currentEpoch !== null)
+        await queryClient.invalidateQueries({
+          queryKey: instructorCourseCollectionQueryPrefix(currentEpoch),
+        });
       window.requestAnimationFrame(() =>
         collectionHeadingRef.current?.focus({ preventScroll: true }),
       );
@@ -239,7 +268,7 @@ export function InstructorCoursesPage() {
   ]);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (create.isPending) return;
+    if (create.isPending || isCreateSubmissionPendingRef.current) return;
     const validationMessage = titleValidationMessage(title);
     if (validationMessage !== null) {
       setTitleError(validationMessage);
@@ -247,6 +276,7 @@ export function InstructorCoursesPage() {
       return;
     }
     setTitleError(null);
+    isCreateSubmissionPendingRef.current = true;
     create.mutate();
   };
   return (
@@ -263,32 +293,34 @@ export function InstructorCoursesPage() {
         <h2 id="your-courses-heading" ref={collectionHeadingRef} tabIndex={-1}>
           {t('instructor:coursesYourCourses')}
         </h2>
-        {collection.isPending ? (
+        {cacheEpoch !== null && collection.isPending ? (
           <SkeletonGroup label={t('instructor:coursesLoadingYourCourses')}>
             <Skeleton width="100%" height="120px" shape="rect" />
           </SkeletonGroup>
         ) : null}
-        {collection.isError ? (
+        {hasCollectionError ? (
           <Notice tone="error" title={t('instructor:coursesCourseListUnavailable')}>
-            <p>{collectionFailure(collection.error, t)}</p>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (collection.error instanceof ApiError && collection.error.status === 422) {
-                  pendingCollectionFocusPageRef.current = 1;
-                  setParams({});
-                  return;
-                }
-                pendingCollectionFocusPageRef.current = page;
-                void collection.refetch();
-              }}
-            >
-              {t('routes:tryAgain')}
-            </Button>
+            <p>{collectionFailure(collectionError, t)}</p>
+            {cacheEpoch !== null ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (collectionError instanceof ApiError && collectionError.status === 422) {
+                    pendingCollectionFocusPageRef.current = 1;
+                    setParams({});
+                    return;
+                  }
+                  pendingCollectionFocusPageRef.current = page;
+                  void collection.refetch();
+                }}
+              >
+                {t('routes:tryAgain')}
+              </Button>
+            ) : null}
           </Notice>
         ) : null}
-        {collection.data ? (
+        {cacheEpoch !== null && collection.data ? (
           <>
             <p className={styles.collectionCount}>
               {t('catalog:resultCount', { count: collection.data.total })}

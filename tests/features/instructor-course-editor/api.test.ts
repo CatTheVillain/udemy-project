@@ -12,7 +12,7 @@ import {
   uploadInstructorLessonFile,
 } from '../../../src/features/instructor-course-editor';
 import type { SessionContextValue } from '../../../src/features/auth-session';
-import { ApiError, type ApiRequestOptions } from '../../../src/shared/api';
+import { ApiError, createApiClient, type ApiRequestOptions } from '../../../src/shared/api';
 
 const course = {
   id: 7,
@@ -108,6 +108,24 @@ function asSessionRequest(
 }
 
 describe('instructor course editor API', () => {
+  it('normalizes a malformed API-010 editor response through the real client boundary', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ...course, instructor: { ...course.instructor, id: '3' } }), {
+          status: 200,
+        }),
+    );
+    const client = createApiClient({ baseUrl: 'https://api.example.test', fetch });
+    const error = await requestInstructorEditorCourse(
+      sessionWith(asSessionRequest((options) => client.request(options))),
+      7,
+      new AbortController().signal,
+    ).catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ kind: 'invalid_response', status: 200 });
+  });
+
   it('does not map a hostile inherited 422 field location or emit a rendered summary', () => {
     const failure = mapInstructorEditorFormFailure(
       new ApiError({
@@ -490,6 +508,21 @@ describe('instructor course editor API', () => {
         7,
         new AbortController().signal,
       ),
-    ).rejects.toThrow('Invalid lesson type');
+    ).rejects.toThrow('Unsupported lesson type: audio');
+  });
+
+  it('rejects a created lesson whose parent course differs from the API-015 course', async () => {
+    const request = vi.fn(async (options: ApiRequestOptions) =>
+      decode(options, { ...lesson, course_id: 9 }),
+    );
+
+    await expect(
+      createInstructorLesson(sessionWith(asSessionRequest(request)), 7, {
+        title: 'New lesson',
+        lessonType: 'pdf',
+        description: 'Notes',
+        isPublished: true,
+      }),
+    ).rejects.toThrow('Invalid lesson course id');
   });
 });

@@ -19,6 +19,9 @@ export type {
 } from './api';
 export {
   mapInstructorEditorFormFailure,
+  getInstructorLessonUploadRule,
+  isInstructorLessonUploadFileAccepted,
+  parseInstructorEditorId,
   resolveInstructorEditorFormFailure,
   resolveInstructorEditorFailureMessage,
   type InstructorEditorErrorCopy,
@@ -27,6 +30,7 @@ export {
   type InstructorEditorFieldDefinitions,
   type InstructorEditorFailureMessage,
   type InstructorEditorFormFailure,
+  type InstructorLessonUploadRule,
 } from './validation';
 export type {
   CreateInstructorLessonInput,

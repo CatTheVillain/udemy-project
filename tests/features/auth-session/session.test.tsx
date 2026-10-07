@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { useState } from 'react';
+import { QueryClient } from '@tanstack/react-query';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +12,16 @@ import {
   useSession,
   type AccessTokenStore,
 } from '../../../src/features/auth-session';
+import { requestLessonOutline } from '../../../src/features/course-detail/api';
 import type { UserProfileDto } from '../../../src/entities/user';
+import { cancelAndRemovePrivateQueries } from '../../../src/app/query/SessionPrivateCacheLifecycle';
+import {
+  instructorCourseCollectionQueryKey,
+  instructorCourseQueryKey,
+  instructorCourseRosterQueryKey,
+  instructorLessonQueryKey,
+  type SessionCacheEpoch,
+} from '../../../src/shared/api/query-keys';
 
 const profile: UserProfileDto = {
   email: 'learner@example.com',
@@ -387,12 +397,91 @@ describe('SessionProvider', () => {
   });
 });
 
-function RequestHarness({ mode }: { mode: 'required' | 'optional' }) {
+describe('session-scoped private query cleanup', () => {
+  it('cancels and removes every canonical instructor family while retaining public cache data', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const epoch = 'instructor-session-a' as SessionCacheEpoch;
+    const privateKeys = [
+      instructorCourseQueryKey(epoch, 7),
+      instructorLessonQueryKey(epoch, 8),
+      instructorCourseCollectionQueryKey(epoch, 1),
+      instructorCourseRosterQueryKey(epoch, 7, 1),
+    ];
+    const publicKey = ['catalog', 'courses', 1] as const;
+    const cancellations: AbortSignal[] = [];
+
+    for (const key of privateKeys) {
+      void queryClient
+        .fetchQuery({
+          queryKey: key,
+          queryFn: ({ signal }) => {
+            cancellations.push(signal);
+            return new Promise<never>(() => undefined);
+          },
+        })
+        .catch(() => undefined);
+    }
+    queryClient.setQueryData(publicKey, { title: 'Public course remains' });
+    await waitFor(() => expect(cancellations).toHaveLength(4));
+
+    await cancelAndRemovePrivateQueries(queryClient, epoch);
+
+    expect(cancellations.every((signal) => signal.aborted)).toBe(true);
+    expect(privateKeys.map((key) => queryClient.getQueryData(key))).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(queryClient.getQueryData(publicKey)).toEqual({ title: 'Public course remains' });
+    queryClient.clear();
+  });
+
+  it('does not restore late old-session data after lifecycle cleanup', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const epoch = 'instructor-session-old' as SessionCacheEpoch;
+    const privateKey = instructorCourseQueryKey(epoch, 7);
+    const late = deferred<{ title: string }>();
+    const request = queryClient.fetchQuery({
+      queryKey: privateKey,
+      queryFn: () => late.promise,
+    });
+    queryClient.setQueryData(['catalog', 'courses', 1], { title: 'Public course remains' });
+    await waitFor(() =>
+      expect(queryClient.getQueryState(privateKey)?.fetchStatus).toBe('fetching'),
+    );
+
+    await cancelAndRemovePrivateQueries(queryClient, epoch);
+    late.resolve({ title: 'Old instructor course' });
+    await request.catch(() => undefined);
+
+    expect(queryClient.getQueryData(privateKey)).toBeUndefined();
+    expect(queryClient.getQueryData(['catalog', 'courses', 1])).toEqual({
+      title: 'Public course remains',
+    });
+    queryClient.clear();
+  });
+});
+
+function RequestHarness({
+  mode,
+  requestOptions = {},
+}: {
+  mode: 'required' | 'optional';
+  requestOptions?: Pick<ApiRequestOptions, 'method' | 'signal'>;
+}) {
   const { acceptAccessToken, requestOptional, requestRequired, state } = useSession();
   const [result, setResult] = useState('idle');
   return (
     <div>
       <output aria-label="session status">{state.status}</output>
+      <output aria-label="session role">
+        {state.status === 'authenticated' ? state.user.role : 'none'}
+      </output>
       <output aria-label="request result">{result}</output>
       <button type="button" onClick={() => acceptAccessToken('newer-token')}>
         Accept newer token
@@ -406,10 +495,12 @@ function RequestHarness({ mode }: { mode: 'required' | 'optional' }) {
                 ? await requestOptional<{ ok: boolean }>({
                     path: '/courses',
                     dedupeKey: 'public-courses',
+                    ...requestOptions,
                   })
                 : await requestRequired<{ ok: boolean }>({
                     path: '/cart',
                     dedupeKey: 'current-cart',
+                    ...requestOptions,
                   });
             setResult(response.ok ? 'success' : 'unexpected');
           } catch {
@@ -418,6 +509,33 @@ function RequestHarness({ mode }: { mode: 'required' | 'optional' }) {
         }}
       >
         Run request
+      </button>
+    </div>
+  );
+}
+
+function LessonOutlineHarness() {
+  const session = useSession();
+  const [result, setResult] = useState('idle');
+  return (
+    <div>
+      <output aria-label="session status">{session.state.status}</output>
+      <output aria-label="outline result">{result}</output>
+      <button type="button" onClick={() => session.acceptAccessToken('newer-token')}>
+        Accept newer token
+      </button>
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            const outline = await requestLessonOutline(session, 7, new AbortController().signal);
+            setResult(outline.items.length === 1 ? 'success' : 'unexpected');
+          } catch {
+            setResult('failed');
+          }
+        }}
+      >
+        Load outline
       </button>
     </div>
   );
@@ -532,13 +650,198 @@ async function verifyGenerationScopedRealClientOverlap(
 }
 
 describe('session-aware requests', () => {
+  it.each([
+    {
+      name: 'a completed stale response',
+      settle: (pending: ReturnType<typeof deferred<unknown>>) => pending.resolve({ ok: true }),
+    },
+    {
+      name: 'the client stale-session error',
+      settle: (pending: ReturnType<typeof deferred<unknown>>) =>
+        pending.reject(
+          new ApiError({
+            kind: 'aborted',
+            status: null,
+            message: 'Request belongs to a replaced session',
+          }),
+        ),
+    },
+  ])('retries an optional public read once after $name', async ({ settle }) => {
+    const store = tokenStore('older-token');
+    const staleRequest = deferred<unknown>();
+    let optionalRequests = 0;
+    let bootstrapRequests = 0;
+    const request = vi.fn((options: ApiRequestOptions) => {
+      if (options.path === '/me') {
+        bootstrapRequests += 1;
+        return Promise.resolve({
+          ...profile,
+          role: bootstrapRequests === 1 ? 'student' : 'instructor',
+        });
+      }
+      optionalRequests += 1;
+      return optionalRequests === 1 ? staleRequest.promise : Promise.resolve({ ok: true });
+    });
+    render(
+      <SessionProvider client={clientFrom(request)} tokenStore={store}>
+        <RequestHarness mode="optional" />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    expect(screen.getByLabelText('session role').textContent).toBe('student');
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() => expect(optionalRequests).toBe(1));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await waitFor(() =>
+      expect(screen.getByLabelText('session role').textContent).toBe('instructor'),
+    );
+    expect(bootstrapRequests).toBe(2);
+
+    await act(async () => settle(staleRequest));
+    await waitFor(() =>
+      expect(screen.getByLabelText('request result').textContent).toBe('success'),
+    );
+    expect(optionalRequests).toBe(2);
+    expect(store.value).toBe('newer-token');
+  });
+
+  it('does not retry an optional request aborted by its caller after session replacement', async () => {
+    const controller = new AbortController();
+    const pending = deferred<unknown>();
+    const request = vi.fn((options: ApiRequestOptions) => {
+      if (options.path === '/me') return Promise.resolve(profile);
+      return pending.promise;
+    });
+    render(
+      <SessionProvider client={clientFrom(request)} tokenStore={tokenStore('current-token')}>
+        <RequestHarness mode="optional" requestOptions={{ signal: controller.signal }} />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() =>
+      expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1),
+    );
+    expect(request.mock.calls.find(([options]) => options.path === '/courses')?.[0].signal).toBe(
+      controller.signal,
+    );
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    controller.abort();
+    await act(async () =>
+      pending.reject(
+        new ApiError({ kind: 'aborted', status: null, message: 'Request was cancelled' }),
+      ),
+    );
+    await waitFor(() => expect(screen.getByLabelText('request result').textContent).toBe('failed'));
+    expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1);
+  });
+
+  it('does not retry an optional request after its provider unmounts', async () => {
+    const pending = deferred<unknown>();
+    const request = vi.fn((options: ApiRequestOptions) =>
+      options.path === '/me' ? Promise.resolve(profile) : pending.promise,
+    );
+    const view = render(
+      <SessionProvider client={clientFrom(request)} tokenStore={tokenStore('current-token')}>
+        <RequestHarness mode="optional" />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    await act(async () =>
+      userEvent.setup().click(screen.getByRole('button', { name: 'Run request' })),
+    );
+    await waitFor(() =>
+      expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1),
+    );
+    view.unmount();
+    await act(async () => pending.resolve({ ok: true }));
+    expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1);
+  });
+
+  it('does not retry an optional mutation after session replacement', async () => {
+    const pending = deferred<unknown>();
+    const request = vi.fn((options: ApiRequestOptions) =>
+      options.path === '/me' ? Promise.resolve(profile) : pending.promise,
+    );
+    render(
+      <SessionProvider client={clientFrom(request)} tokenStore={tokenStore('current-token')}>
+        <RequestHarness mode="optional" requestOptions={{ method: 'POST' }} />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() =>
+      expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1),
+    );
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await act(async () => pending.resolve({ ok: true }));
+    await waitFor(() => expect(screen.getByLabelText('request result').textContent).toBe('failed'));
+    expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1);
+  });
+
+  it('does not issue a third optional request when recovery is superseded by the same token again', async () => {
+    const store = tokenStore('older-token');
+    const staleRequest = deferred<unknown>();
+    const recoveryRequest = deferred<unknown>();
+    let optionalRequests = 0;
+    let bootstrapRequests = 0;
+    const request = vi.fn((options: ApiRequestOptions) => {
+      if (options.path === '/me') {
+        bootstrapRequests += 1;
+        return Promise.resolve({
+          ...profile,
+          role: bootstrapRequests === 1 ? 'student' : 'instructor',
+        });
+      }
+      optionalRequests += 1;
+      if (optionalRequests === 1) return staleRequest.promise;
+      if (optionalRequests === 2) return recoveryRequest.promise;
+      throw new Error('Unexpected third optional request');
+    });
+    render(
+      <SessionProvider client={clientFrom(request)} tokenStore={store}>
+        <RequestHarness mode="optional" />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() => expect(optionalRequests).toBe(1));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await act(async () => staleRequest.resolve({ ok: true }));
+    await waitFor(() => expect(optionalRequests).toBe(2));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await act(async () => recoveryRequest.resolve({ ok: true }));
+    await waitFor(() => expect(screen.getByLabelText('request result').textContent).toBe('failed'));
+    expect(optionalRequests).toBe(2);
+    expect(store.value).toBe('newer-token');
+  });
+
   it('isolates same-key real-client work across generations when the older request succeeds', async () => {
     await verifyGenerationScopedRealClientOverlap(
       new Response(JSON.stringify({ source: 'old-session' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
-      'old-session',
+      'failed',
     );
   });
 
@@ -691,5 +994,155 @@ describe('session-aware requests', () => {
     expect(courseAttempts).toBe(2);
     expect(courseAuthorization).toEqual(['Bearer invalid-on-optional', null]);
     expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('recovers a replaced lesson-outline read without retaining the stale decoder state', async () => {
+    const store = tokenStore('older-token');
+    const oldOutline = deferred<Response>();
+    const outlineCalls: Array<string | null> = [];
+    const fetchImplementation: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const authorization = new Headers(init?.headers).get('Authorization');
+      if (url.endsWith('/me')) {
+        return new Response(JSON.stringify(profile), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      outlineCalls.push(authorization);
+      if (outlineCalls.length === 1) return oldOutline.promise;
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: 1,
+              title: 'Lesson 1',
+              lesson_type: 'video',
+              download_url: '/media/lessons/1.mp4',
+              description: null,
+              is_published: true,
+              created_at: '2026-07-01T00:00:00Z',
+              updated_at: '2026-07-01T00:00:00Z',
+            },
+          ],
+          page: 1,
+          page_size: 100,
+          total: 1,
+          pages: 1,
+          has_next: false,
+          has_previous: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+    render(
+      <SessionProvider
+        apiBaseUrl="https://api.learnhub.test"
+        fetchImplementation={fetchImplementation}
+        tokenStore={store}
+      >
+        <LessonOutlineHarness />
+      </SessionProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Load outline' })));
+    await waitFor(() => expect(outlineCalls).toEqual(['Bearer older-token']));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    await act(async () =>
+      oldOutline.resolve(
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 1,
+                title: 'Lesson 1',
+                lesson_type: 'video',
+                download_url: '/media/lessons/1.mp4',
+                description: null,
+                is_published: true,
+                created_at: '2026-07-01T00:00:00Z',
+                updated_at: '2026-07-01T00:00:00Z',
+              },
+            ],
+            page: 1,
+            page_size: 100,
+            total: 1,
+            pages: 1,
+            has_next: false,
+            has_previous: false,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('outline result').textContent).toBe('success'),
+    );
+    expect(outlineCalls).toEqual(['Bearer older-token', 'Bearer newer-token']);
+    expect(store.value).toBe('newer-token');
+  });
+
+  it('clears a replacement token after its recovered optional GET receives 401, then retries publicly', async () => {
+    const store = tokenStore('older-token');
+    const firstResponse = deferred<Response>();
+    const authorizations: Array<string | null> = [];
+    const fetchImplementation: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const authorization = new Headers(init?.headers).get('Authorization');
+      if (url.endsWith('/me')) {
+        return new Response(JSON.stringify(profile), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      authorizations.push(authorization);
+      if (authorizations.length === 1) return firstResponse.promise;
+      if (authorizations.length === 2) {
+        return new Response(JSON.stringify({ detail: 'Expired replacement token' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+    render(
+      <SessionProvider
+        apiBaseUrl="https://api.learnhub.test"
+        fetchImplementation={fetchImplementation}
+        tokenStore={store}
+      >
+        <RequestHarness mode="optional" />
+      </SessionProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() => expect(authorizations).toEqual(['Bearer older-token']));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await act(async () =>
+      firstResponse.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('request result').textContent).toBe('success'),
+    );
+    expect(authorizations).toEqual(['Bearer older-token', 'Bearer newer-token', null]);
+    expect(store.value).toBe(null);
+    expect(screen.getByLabelText('session status').textContent).toBe('anonymous');
   });
 });

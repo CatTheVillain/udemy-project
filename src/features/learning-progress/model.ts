@@ -48,7 +48,15 @@ export const DEFAULT_LEARNING_FEEDBACK_MOTION_PREFERENCES: LearningFeedbackMotio
   reducedMotion: false,
 };
 
-export type LessonCompletionState = { status: 'unknown' } | { status: 'known'; completed: boolean };
+interface UnknownLessonCompletionState {
+  readonly status: 'unknown';
+}
+interface KnownLessonCompletionState {
+  readonly status: 'known';
+  readonly completed: boolean;
+}
+
+export type LessonCompletionState = UnknownLessonCompletionState | KnownLessonCompletionState;
 
 export interface LessonProgressAttempt {
   subject: SessionCacheEpoch;

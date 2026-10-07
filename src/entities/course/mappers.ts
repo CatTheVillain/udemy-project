@@ -59,6 +59,25 @@ export function mapLessonTypeDto(value: unknown): LessonType {
   }
 }
 
+export function decodeLessonDto(value: unknown): LessonDto {
+  const item = readRecord(value, 'lesson');
+  return {
+    id: readPositiveInteger(item.id, 'lesson id'),
+    course_id: readPositiveInteger(item.course_id, 'lesson course id'),
+    title: readString(item.title, 'lesson title'),
+    lesson_type: mapLessonTypeDto(item.lesson_type),
+    download_url: readNullableString(item.download_url, 'lesson download_url'),
+    subtitle_status:
+      item.subtitle_status === undefined
+        ? false
+        : readBoolean(item.subtitle_status, 'lesson subtitle_status'),
+    description: readNullableString(item.description, 'lesson description'),
+    is_published: readBoolean(item.is_published, 'lesson is_published'),
+    created_at: readString(item.created_at, 'lesson created_at'),
+    updated_at: readString(item.updated_at, 'lesson updated_at'),
+  };
+}
+
 export function mapCourseDto(dto: CourseDto): Course {
   return {
     id: dto.id,

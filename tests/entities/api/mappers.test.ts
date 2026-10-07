@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeCartItemDto, mapCartDto } from '../../../src/entities/cart';
 import {
   decodeCourseListDto,
+  decodeLessonDto,
   mapCourseListDto,
   mapCourseDto,
   mapLessonDto,
@@ -394,6 +395,45 @@ describe('wire DTO to domain mappers', () => {
     expect(lessonTypes.map(mapLessonTypeDto)).toEqual(lessonTypes);
     expect(enrollmentStatuses.map(mapEnrollmentStatusDto)).toEqual(enrollmentStatuses);
     expect(userRoles.map(mapUserRoleDto)).toEqual(userRoles);
+  });
+
+  it.each(['video', 'text', 'pdf'] as const)(
+    'decodes the shared lesson DTO enum: %s',
+    (lessonType) => {
+      expect(
+        decodeLessonDto({
+          id: 3,
+          course_id: 1,
+          title: 'Types',
+          lesson_type: lessonType,
+          download_url: null,
+          description: null,
+          is_published: false,
+          created_at: '2026-07-01T00:00:00Z',
+          updated_at: '2026-07-01T00:00:00Z',
+        }),
+      ).toMatchObject({ course_id: 1, lesson_type: lessonType, download_url: null });
+    },
+  );
+
+  it.each([
+    ['download_url', 42],
+    ['description', false],
+  ])('rejects a malformed nullable lesson DTO %s primitive', (field, value) => {
+    expect(() =>
+      decodeLessonDto({
+        id: 3,
+        course_id: 1,
+        title: 'Types',
+        lesson_type: 'video',
+        download_url: null,
+        description: null,
+        is_published: false,
+        created_at: '2026-07-01T00:00:00Z',
+        updated_at: '2026-07-01T00:00:00Z',
+        [field]: value,
+      }),
+    ).toThrow();
   });
 
   it('rejects unknown runtime enum values deterministically', () => {

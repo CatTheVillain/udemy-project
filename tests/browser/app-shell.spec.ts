@@ -322,6 +322,59 @@ async function waitForCatalogMobileHeroBackground(page: Page) {
   });
 }
 
+async function readCatalogHeroBackgroundUrl(page: Page): Promise<string> {
+  const hero = page.locator('[data-part="catalog-hero"]');
+  await expect(hero).toHaveCount(1);
+  return hero.evaluate((element) => {
+    if (!(element instanceof HTMLElement)) throw new Error('Catalog hero is unavailable');
+
+    const backgroundImage = getComputedStyle(element, '::before').backgroundImage;
+    const assetUrls = Array.from(backgroundImage.matchAll(/url\((['"]?)(.*?)\1\)/g), (match) => {
+      const assetUrl = match[2];
+      if (!assetUrl) throw new Error('Catalog hero background URL is unavailable');
+      const resolvedUrl = new URL(assetUrl, window.location.href);
+      if (resolvedUrl.origin !== window.location.origin)
+        throw new Error(`Catalog hero background has a non-local origin: ${resolvedUrl.origin}`);
+      return resolvedUrl;
+    });
+    if (assetUrls.length !== 1)
+      throw new Error(`Expected one Catalog hero background asset, received ${assetUrls.length}`);
+
+    const [assetUrl] = assetUrls;
+    if (
+      ![
+        '/src/pages/catalog-page/assets/catalog-hero-ui025.png',
+        '/src/pages/catalog-page/assets/catalog-hero-mobile-stars-lines-uifd001.png',
+      ].includes(assetUrl.pathname)
+    ) {
+      throw new Error(`Unexpected Catalog hero background asset: ${assetUrl.href}`);
+    }
+
+    return assetUrl.href;
+  });
+}
+
+async function waitForCatalogHeroBackground(page: Page) {
+  const assetUrl = await readCatalogHeroBackgroundUrl(page);
+  await page.evaluate(async (url) => {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    if (image.naturalWidth === 0) throw new Error(`Catalog hero background failed: ${url}`);
+  }, assetUrl);
+}
+
+async function gotoCatalogAndWaitForHero(
+  page: Page,
+  url: string,
+  options?: Parameters<Page['goto']>[1],
+) {
+  if (await page.locator('[data-part="catalog-hero"]').count())
+    await waitForCatalogHeroBackground(page);
+  await page.goto(url, options);
+  await waitForCatalogHeroBackground(page);
+}
+
 async function waitForLearningEmptyStateIllustration(page: Page) {
   await page
     .locator('[aria-labelledby="learning-empty-heading"] img')
@@ -351,6 +404,21 @@ async function waitForLearningEmptyStateIllustration(page: Page) {
         throw new Error(`Learning empty-state illustration failed: ${assetUrl.href}`);
       await image.decode();
     }, LEARNING_EMPTY_STATE_IMAGE_PATH);
+}
+
+async function waitForAiChatHeroImage(page: Page) {
+  await page.locator('[data-part="ai-chat-hero-image"]').evaluate(async (image) => {
+    if (!(image instanceof HTMLImageElement)) throw new Error('AI chat hero image is unavailable');
+    if (!image.complete) {
+      await new Promise<void>((resolve, reject) => {
+        image.addEventListener('load', () => resolve(), { once: true });
+        image.addEventListener('error', () => reject(new Error('AI chat hero image failed')), {
+          once: true,
+        });
+      });
+    }
+    if (image.naturalWidth === 0) throw new Error('AI chat hero image failed');
+  });
 }
 
 async function navigateStudentHeaderAtDesktopWidth(page: Page, width: StudentHeaderDesktopWidth) {
@@ -687,7 +755,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 
 async function expectShellSurfacesAtViewportEdges(page: Page, width: ShellSurfaceViewportWidth) {
   await page.setViewportSize({ width, height: 900 });
-  await page.goto('/');
+  await gotoCatalogAndWaitForHero(page, '/');
   await page.getByRole('contentinfo').evaluate((footer) =>
     footer.scrollIntoView({
       block: 'center',
@@ -885,7 +953,7 @@ async function expectBrandFocusTreatment(page: Page, brand: Locator) {
 
 async function expectAnonymousDesktopHeaderGeometry(page: Page, width: DesktopViewportWidth) {
   await page.setViewportSize({ width, height: 900 });
-  await page.goto('/');
+  await gotoCatalogAndWaitForHero(page, '/');
 
   const brand = page.getByRole('link', { name: 'LearnHub home' });
   const navigation = page.getByRole('navigation', { name: 'Primary navigation' });
@@ -1326,6 +1394,97 @@ test('redirects an anonymous protected route with its internal returnTo', async 
   assertRuntimeClean();
 });
 
+test('marks Catalog as the current location on Course Detail and keeps its root page semantics', async ({
+  page,
+}) => {
+  const assertRuntimeClean = monitorRuntime(page);
+  await page.addInitScript(
+    ({ detailBody, outlineBody }) => {
+      const nativeFetch = globalThis.fetch.bind(globalThis);
+      const observed = globalThis as typeof globalThis & {
+        __catalogCurrentLocationRequests?: Array<{ method: string; path: string }>;
+      };
+      observed.__catalogCurrentLocationRequests = [];
+      globalThis.fetch = async (input, init) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        const url = new URL(request.url);
+        const path = `${url.pathname}${url.search}`;
+        const relevant = url.pathname === '/courses/7' || url.pathname === '/courses/7/lessons';
+        if (relevant)
+          observed.__catalogCurrentLocationRequests?.push({ method: request.method, path });
+
+        const isDetail = request.method === 'GET' && path === '/courses/7';
+        const isOutline = request.method === 'GET' && path === '/courses/7/lessons?page=1&size=100';
+        if (!isDetail && !isOutline) return nativeFetch(input, init);
+        if (request.signal.aborted) {
+          throw new DOMException('The operation was aborted.', 'AbortError');
+        }
+        return new Response(isDetail ? detailBody : outlineBody, {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      };
+    },
+    {
+      detailBody: JSON.stringify({
+        id: 7,
+        title: 'React foundations',
+        description: 'Build reliable interfaces.',
+        price: '0.00',
+        currency: 'USD',
+        published_at: '2026-07-01T00:00:00Z',
+        created_at: '2026-07-01T00:00:00Z',
+        updated_at: '2026-07-01T00:00:00Z',
+        instructor: { id: 2, name: 'Ada', surname: 'Lovelace' },
+        lessons: [],
+      }),
+      outlineBody: JSON.stringify({
+        items: [],
+        page: 1,
+        page_size: 100,
+        total: 0,
+        pages: 0,
+        has_next: false,
+        has_previous: false,
+      }),
+    },
+  );
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/courses/7');
+  await expect(page.getByRole('heading', { level: 1, name: 'React foundations' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Course outline' })).toBeVisible();
+
+  const observedRequests = await page.evaluate(() => {
+    const fixture = globalThis as typeof globalThis & {
+      __catalogCurrentLocationRequests?: Array<{ method: string; path: string }>;
+    };
+    return fixture.__catalogCurrentLocationRequests;
+  });
+  expect(observedRequests).toEqual(
+    expect.arrayContaining([
+      { method: 'GET', path: '/courses/7' },
+      { method: 'GET', path: '/courses/7/lessons?page=1&size=100' },
+    ]),
+  );
+  expect(
+    observedRequests?.every(
+      ({ method, path }) =>
+        method === 'GET' &&
+        (path === '/courses/7' || path === '/courses/7/lessons?page=1&size=100'),
+    ),
+  ).toBe(true);
+
+  const catalog = page
+    .getByRole('navigation', { name: 'Primary navigation' })
+    .getByRole('link', { name: 'Catalog', exact: true });
+  await expect(catalog).toHaveAttribute('aria-current', 'location');
+  await catalog.click();
+  await expect(page).toHaveURL('/');
+  await expect(catalog).toHaveAttribute('aria-current', 'page');
+  await expectNoHorizontalOverflow(page);
+  assertRuntimeClean();
+});
+
 test('persists desktop and anonymous-mobile locale selections on the current route', async ({
   page,
 }) => {
@@ -1735,6 +1894,7 @@ test('replaces attempted Instructor Catalog history with Instructor courses', as
     page.goto('/instructor/courses?source=history#start'),
   ]);
   await expectInstructorCoursesOnly('/instructor/courses?source=history#start');
+  await waitForInstructorCoursesBackgroundAssets(page);
 
   // B: attempted public Catalog entry; C: RouteBoundary Navigate replace destination and fulfillment #2.
   await Promise.all([
@@ -1742,14 +1902,17 @@ test('replaces attempted Instructor Catalog history with Instructor courses', as
     page.goto('/?search_query=React#catalog'),
   ]);
   await expectInstructorCoursesOnly('/instructor/courses');
+  await waitForInstructorCoursesBackgroundAssets(page);
 
   // Back restores A and fulfillment #3; B is absent because the redirect used replace.
   await Promise.all([collectionFixture.waitForFulfillment(), page.goBack()]);
   await expectInstructorCoursesOnly('/instructor/courses?source=history#start');
+  await waitForInstructorCoursesBackgroundAssets(page);
 
   // Forward restores C, never attempted Catalog B, and fulfillment #4.
   await Promise.all([collectionFixture.waitForFulfillment(), page.goForward()]);
   await expectInstructorCoursesOnly('/instructor/courses');
+  await waitForInstructorCoursesBackgroundAssets(page);
   await expectNoHorizontalOverflow(page);
   assertRuntimeClean();
 });
@@ -1773,6 +1936,7 @@ test('routes the Instructor LearnHub brand to Instructor courses with native lin
     ]);
     const brand = page.getByRole('link', { name: 'LearnHub home' });
     await expect(brand).toHaveAttribute('href', '/instructor/courses');
+    await waitForInstructorCoursesBackgroundAssets(page);
     return brand;
   }
 
@@ -1986,6 +2150,39 @@ test('keeps anonymous mobile navigation in visual and keyboard order', async ({ 
   assertRuntimeClean();
 });
 
+test('restores the anonymous tablet menu trigger after current Catalog keyboard activation', async ({
+  page,
+}) => {
+  const assertRuntimeClean = monitorRuntime(page);
+  await page.setViewportSize({ width: 768, height: 844 });
+  await page.goto('/');
+  const menu = page.getByRole('button', { name: 'Open navigation' });
+  await menu.focus();
+  await page.keyboard.press('Enter');
+  const navigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+  const catalog = navigation.getByRole('link', { name: 'Catalog' });
+  await expect(catalog).toHaveAttribute('href', '/');
+  await expect(catalog).toHaveAttribute('aria-current', 'page');
+  await catalog.focus();
+  await page.keyboard.press('Enter');
+  await expect(navigation).toHaveCount(0);
+  await expect(menu).toBeFocused();
+  await expect(page).toHaveURL('/');
+
+  await page.keyboard.press('Enter');
+  const modifiedCatalog = page
+    .getByRole('navigation', { name: 'Mobile navigation' })
+    .getByRole('link', { name: 'Catalog' });
+  await modifiedCatalog.focus();
+  await page.keyboard.down('Control');
+  await page.keyboard.press('Enter');
+  await page.keyboard.up('Control');
+  await expect(modifiedCatalog).toBeFocused();
+  await expect(page.getByRole('navigation', { name: 'Mobile navigation' })).toBeVisible();
+  await expect(page).toHaveURL('/');
+  assertRuntimeClean();
+});
+
 test('keeps header and footer surfaces at the physical viewport edges without symmetric gutters', async ({
   page,
 }) => {
@@ -2132,6 +2329,7 @@ test('keeps the accepted shared-header marks and quiet desktop Bot interaction s
   await expect(assistant).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(assistant).toHaveCSS('color', 'rgb(75, 50, 181)');
   await expect(assistant).toHaveCSS('transform', 'none');
+  await waitForAiChatHeroImage(page);
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/learning');
@@ -2141,6 +2339,7 @@ test('keeps the accepted shared-header marks and quiet desktop Bot interaction s
   await expect(assistant).toHaveCSS('transform', 'none');
   await page.mouse.move(0, 0);
   await page.mouse.up();
+  await waitForLearningEmptyStateIllustration(page);
 
   await page.goto('/');
   await expect(catalog).toHaveAttribute('aria-current', 'page');
@@ -2162,7 +2361,7 @@ test('exposes representative production tokens across marketplace and workspace 
     [INSTRUCTOR_COURSE_COLLECTION_STRICT_MODE_ABORT],
   );
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto('/');
+  await gotoCatalogAndWaitForHero(page, '/');
 
   const marketplace = await readRepresentativeTokenSnapshot(page);
   const expectedCanvasColor = await resolveBrowserColor(page, colorTokens['--color-canvas']);
@@ -2196,6 +2395,7 @@ test('exposes representative production tokens across marketplace and workspace 
 
   await mockAuthenticatedSession(page, 'instructor');
   const collectionFixture = await mockInstructorCourseCollection(page);
+  await waitForCatalogHeroBackground(page);
   await Promise.all([collectionFixture.waitForFulfillment(), page.goto('/instructor/courses')]);
   await expect(
     page.getByRole('heading', { level: 1, name: 'Instructor courses', includeHidden: true }),
@@ -2344,6 +2544,7 @@ test('shows authenticated account details on hover and preserves the device loca
     'preserve-me',
   );
   await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+  await waitForCatalogHeroBackground(page);
   await accessTokenInit.dispose();
   await page.reload();
   await expect(page.getByRole('link', { name: 'Войти' })).toBeVisible();
@@ -2656,6 +2857,51 @@ test('shows a bootstrap state then student-only workspace navigation', async ({ 
   assertRuntimeClean();
 });
 
+test('keeps the tablet drawer present through a normal navigation before focusing its destination', async ({
+  page,
+}) => {
+  const assertRuntimeClean = monitorRuntime(
+    page,
+    [],
+    [],
+    [CART_STRICT_MODE_ABORT, ENROLLMENTS_STRICT_MODE_ABORT],
+  );
+  await mockAuthenticatedSession(page, 'student');
+  await mockStudentWorkspaceData(page);
+  await page.route('**/courses**', async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [],
+        page: 1,
+        page_size: 20,
+        total: 0,
+        pages: 0,
+        has_next: false,
+        has_previous: false,
+      }),
+    }),
+  );
+  await page.setViewportSize({ width: 890, height: 900 });
+  await page.goto('/learning');
+  await expect(page.getByRole('heading', { level: 1, name: 'My learning' })).toBeVisible();
+
+  const navigationTrigger = page.getByRole('button', { name: 'Open navigation' });
+  await navigationTrigger.click();
+  const drawer = page.getByRole('dialog', { name: 'Menu' });
+  const catalog = drawer.getByRole('link', { name: 'Catalog', exact: true });
+  await expect(drawer).toBeVisible();
+  await expect(catalog).toHaveAttribute('href', '/');
+
+  await catalog.click();
+  await expect(page).toHaveURL('/');
+  await expect(drawer).toHaveCount(0);
+  await expect(page.locator('#main-content')).toBeFocused();
+  await expectNoHorizontalOverflow(page);
+  assertRuntimeClean();
+});
+
 test('keeps the student Catalog, Search, Cart, and account slots stable across Catalog, My learning, and Cart', async ({
   page,
 }) => {
@@ -2944,7 +3190,7 @@ test('preserves student header geometry when Catalog alone requires a document s
     }),
   );
   const gotoCatalog = async () => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await gotoCatalogAndWaitForHero(page, '/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { level: 2, name: 'Found 1 course' })).toBeVisible();
   };
 
@@ -3028,7 +3274,7 @@ test('composes the student mobile shell with a scroll-away identity row and rout
 
   for (const width of [320, 390, 618, 767] as const) {
     await page.setViewportSize({ width, height: 720 });
-    await page.goto('/');
+    await gotoCatalogAndWaitForHero(page, '/');
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(220);
 
@@ -3200,25 +3446,13 @@ test('composes the student mobile shell with a scroll-away identity row and rout
     await aiChat.focus();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL('/ai-chat');
-    await page.locator('[data-part="ai-chat-hero-image"]').evaluate(async (image) => {
-      if (!(image instanceof HTMLImageElement))
-        throw new Error('AI chat hero image is unavailable');
-      if (!image.complete) {
-        await new Promise<void>((resolve, reject) => {
-          image.addEventListener('load', () => resolve(), { once: true });
-          image.addEventListener('error', () => reject(new Error('AI chat hero image failed')), {
-            once: true,
-          });
-        });
-      }
-      if (image.naturalWidth === 0) throw new Error('AI chat hero image failed');
-    });
+    await waitForAiChatHeroImage(page);
 
     expect(chatRequestUrls).toEqual([]);
   }
 
   await page.setViewportSize({ width: 768, height: 720 });
-  await page.goto('/');
+  await gotoCatalogAndWaitForHero(page, '/');
   await expect(page.getByRole('navigation', { name: 'Student navigation' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Account menu for Sam User' })).toHaveCount(0);
   const tabletNavigationTrigger = page.getByRole('button', { name: 'Open navigation' });
@@ -3235,7 +3469,7 @@ test('composes the student mobile shell with a scroll-away identity row and rout
   // A 195px CSS viewport models 390px at browser page zoom 200%; applying CSS zoom to
   // documentElement does not update the viewport media queries that drive mobile reflow.
   await page.setViewportSize({ width: 195, height: 360 });
-  await page.goto('/');
+  await gotoCatalogAndWaitForHero(page, '/');
   await page
     .getByRole('combobox', { name: 'Search courses' })
     .fill('Responsive search content '.repeat(12));
@@ -3786,6 +4020,50 @@ test('keeps focused skip navigation above sticky search chrome and below the dia
   expect(Number(dropdownLayers.searchListbox)).toBeLessThan(Number(dropdownLayers.header));
   expect(Number(dropdownLayers.header)).toBeLessThan(Number(focusedSkipLayers.skip));
   expect(Number(focusedSkipLayers.skip)).toBeLessThan(Number(focusedSkipLayers.modal));
+  await expectNoHorizontalOverflow(page);
+  assertRuntimeClean();
+});
+
+test('keeps catalog search history Enter, pointer, and touch selection focus-safe and canonical', async ({
+  page,
+}) => {
+  const assertRuntimeClean = monitorRuntime(page);
+  await page.addInitScript(() => {
+    localStorage.setItem('learnhub.catalog-search-history', JSON.stringify(['React', 'Redux']));
+  });
+  await installCatalogFixture(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/?sort=-price&page=2');
+
+  const search = page.getByRole('combobox', { name: 'Search courses' });
+  await search.focus();
+  await search.fill('rea');
+  const filteredHistory = page.getByRole('listbox', { name: 'Recent searches' });
+  await expect(filteredHistory.getByRole('option')).toHaveCount(1);
+  await expect(filteredHistory.getByRole('option', { name: 'React' })).toBeVisible();
+  await expect(filteredHistory.getByRole('option', { name: 'Redux' })).toHaveCount(0);
+  await page.keyboard.press('ArrowDown');
+  const react = page.getByRole('option', { name: 'React' });
+  const reactOptionId = await react.getAttribute('id');
+  expect(reactOptionId).not.toBeNull();
+  if (reactOptionId === null) throw new Error('React history option must have an id');
+  await expect(search).toHaveAttribute('aria-activedescendant', reactOptionId);
+  await expect(react).toHaveAttribute('aria-selected', 'true');
+  await expect(search).toBeFocused();
+
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/?search_query=React&sort=-price');
+  await expect(search).toBeFocused();
+  const retainedHistory = page.getByRole('listbox', { name: 'Recent searches' });
+  await expect(retainedHistory).toBeVisible();
+  await expect(retainedHistory.getByRole('option')).toHaveCount(2);
+  await expect(search).not.toHaveAttribute('aria-activedescendant', /.+/);
+
+  const redux = page.getByRole('option', { name: 'Redux' });
+  await redux.dispatchEvent('pointerdown', { pointerType: 'touch' });
+  await redux.dispatchEvent('click');
+  await expect(page).toHaveURL('/?search_query=Redux&sort=-price');
+  await expect(search).toBeFocused();
   await expectNoHorizontalOverflow(page);
   assertRuntimeClean();
 });

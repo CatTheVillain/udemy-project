@@ -245,6 +245,33 @@ describe('fetch API client', () => {
     expect(decode).toHaveBeenCalledTimes(1);
   });
 
+  it('discards a response replaced during its body wait before invoking its decoder', async () => {
+    const body = createDeferred<unknown>();
+    const bodyRead = createDeferred<void>();
+    const decode = vi.fn((value: unknown) => value);
+    let current = true;
+    const client = createApiClient({
+      fetch: vi.fn<FetchArguments, FetchResult>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => {
+          bodyRead.resolve(undefined);
+          return body.promise;
+        },
+      } as Response),
+      getRequestIdentity: () => 'old-session',
+      isRequestIdentityCurrent: () => current,
+    });
+
+    const request = client.request({ path: '/courses/7/lessons', decode });
+    await bodyRead.promise;
+    current = false;
+    body.resolve({ items: [{ id: 1 }] });
+
+    await expect(request).rejects.toMatchObject({ kind: 'aborted' });
+    expect(decode).not.toHaveBeenCalled();
+  });
+
   it('normalizes successful decoder failures with the HTTP status', async () => {
     const client = createApiClient({
       fetch: vi.fn<FetchArguments, FetchResult>().mockResolvedValue(

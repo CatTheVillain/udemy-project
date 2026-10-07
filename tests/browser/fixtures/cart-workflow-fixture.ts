@@ -93,7 +93,7 @@ export async function installCartStudent(page: Page) {
 }
 
 export function isCartApiPath(pathname: string): boolean {
-  return pathname === '/cart' || pathname === '/cart/items/7';
+  return pathname === '/cart' || pathname.startsWith('/cart/');
 }
 
 export function isSuccessfulCartReadResponse(response: Response): boolean {

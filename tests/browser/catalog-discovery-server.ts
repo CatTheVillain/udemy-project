@@ -1,4 +1,5 @@
 import { createServer } from 'vite';
+import { createViteServerLifecycle } from './support/vite-server-lifecycle';
 
 export const catalogDiscoveryOrigin = 'http://127.0.0.1:4178';
 
@@ -15,11 +16,19 @@ export default async function startCatalogServer() {
       watch: { ignored: ['**/plans/**', '**/test-results/**'] },
     },
   });
+
+  const { cleanup, waitWhileActive } = createViteServerLifecycle({
+    close: () => server.close(),
+    cancellationMessage: 'Catalog Vite server startup was cancelled',
+  });
+
   try {
-    await server.listen();
+    await waitWhileActive(() => server.listen());
+    await waitWhileActive(() => server.environments.client.warmupRequest('/src/main.tsx'));
+    await waitWhileActive(() => server.environments.client.waitForRequestsIdle());
   } catch (error) {
-    await server.close();
+    await cleanup();
     throw error;
   }
-  return async () => server.close();
+  return cleanup;
 }

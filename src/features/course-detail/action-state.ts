@@ -39,6 +39,26 @@ interface CourseLoginActionState {
   to: string;
 }
 
+interface CourseEnrollActionState {
+  readonly kind: 'enroll';
+  readonly labelKey: 'catalog:enrollFree';
+}
+interface CourseCartActionState {
+  readonly kind: 'cart';
+  readonly labelKey: 'catalog:addToCart';
+}
+interface CourseDisabledActionState {
+  readonly kind: 'disabled';
+  readonly labelKey:
+    | 'course:actionUnavailable'
+    | 'course:alreadyEnrolled'
+    | 'course:alreadyInCart'
+    | 'catalog:paymentProcessingShort'
+    | 'course:checkingAvailability'
+    | 'course:courseIsNotPublished'
+    | 'course:unavailableForAccount';
+}
+
 interface CourseLoginHelper {
   readonly linkTextKey: 'course:signIn';
   readonly guidanceKey: 'course:signInToEnrollForFree' | 'course:signInToAddCourseToCart';
@@ -46,19 +66,9 @@ interface CourseLoginHelper {
 
 export type CoursePrimaryActionState =
   | CourseLoginActionState
-  | { kind: 'enroll'; labelKey: 'catalog:enrollFree' }
-  | { kind: 'cart'; labelKey: 'catalog:addToCart' }
-  | {
-      kind: 'disabled';
-      labelKey:
-        | 'course:actionUnavailable'
-        | 'course:alreadyEnrolled'
-        | 'course:alreadyInCart'
-        | 'catalog:paymentProcessingShort'
-        | 'course:checkingAvailability'
-        | 'course:courseIsNotPublished'
-        | 'course:unavailableForAccount';
-    };
+  | CourseEnrollActionState
+  | CourseCartActionState
+  | CourseDisabledActionState;
 
 export interface CoursePrimaryActionInput {
   course: CourseActionCandidate;

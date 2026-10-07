@@ -112,6 +112,22 @@ describe('request failure accounting', () => {
     ]);
     expect(present.violations().unconsumedExpectedRequestFailures).toEqual([]);
   });
+
+  it('rejects an unregistered API-021 abort identity', () => {
+    const accounting = createRequestFailureAccounting();
+    const url = 'http://127.0.0.1:4178/enrollments/my?page=1&page_size=100';
+    accounting.observe('GET', url, 'net::ERR_ABORTED');
+
+    expect(accounting.acceptedFailures()).toEqual([]);
+    expect(accounting.violations().requestFailures).toEqual([
+      {
+        method: 'GET',
+        path: '/enrollments/my?page=1&page_size=100',
+        errorText: 'net::ERR_ABORTED',
+        url,
+      },
+    ]);
+  });
 });
 
 describe('HTTP failure accounting', () => {

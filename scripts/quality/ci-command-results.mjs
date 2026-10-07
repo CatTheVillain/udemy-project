@@ -276,8 +276,8 @@ export function assembleCiCommandResults({
     findings: lintStatic.analysis.findings,
     suppressions: lintStatic.analysis.suppressions,
     limitations: [
-      'Report pass is deterministic evidence only; it is not a semantic Review or QA verdict.',
-      'Complexity signals are advisory and do not affect the outcome.',
+      'Report pass is deterministic evidence only; it is not a semantic or architectural Review or QA verdict.',
+      'Complexity signals are advisory and require responsibility-based review; they do not affect the outcome.',
     ],
     advisory: lintStatic.analysis.advisory,
     integrity: { algorithm: 'sha256', digest: '', attestation: null },

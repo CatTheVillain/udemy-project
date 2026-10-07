@@ -57,7 +57,8 @@ const browserConfigPaths = [
   'tests/browser/course-chat.playwright.config.ts',
   'tests/browser/course-detail.playwright.config.ts',
   'tests/browser/instructor-courses-fe029.playwright.config.ts',
-  'tests/browser/instructor-course-editor-fe014.playwright.config.ts',
+  'tests/browser/instructor-course-editor-fe014.preview.playwright.config.ts',
+  'tests/browser/instructor-course-editor-fe014.vite-controls.playwright.config.ts',
   'tests/browser/learning-progress.playwright.config.ts',
 ];
 

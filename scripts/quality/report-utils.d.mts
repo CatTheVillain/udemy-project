@@ -71,11 +71,15 @@ export interface Finding {
 export interface Suppression {
   ruleId: string;
   path: string;
-  owner: string;
-  rationale: string;
+  symbol: string;
+  reason: string;
 }
 export interface Advisory {
   complexitySignals: Record<string, unknown>[];
+  complexityReview: {
+    basis: 'independent-responsibilities';
+    guidance: string;
+  };
 }
 export interface ConfigVersions {
   reportSchema: number;

@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -24,7 +25,19 @@ interface SelectOption {
   readonly disabled: boolean;
 }
 
+interface ListboxViewportPlacement {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly maxHeight?: number;
+  readonly placement: 'bottom' | 'top';
+}
+
 type NativeOptionElement = ReactElement<OptionHTMLAttributes<HTMLOptionElement>>;
+
+const LISTBOX_VIEWPORT_GUTTER = 4;
+const LISTBOX_TRIGGER_GAP = 8;
+const LISTBOX_MAX_HEIGHT_REM = 15;
 
 export interface SelectProps
   extends Omit<
@@ -119,6 +132,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
   const selectedOption = options[selectedIndex];
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [listboxPlacement, setListboxPlacement] = useState<ListboxViewportPlacement | null>(null);
   const activeOptionId = activeIndex === null ? undefined : `${listboxId}-option-${activeIndex}`;
 
   const setTriggerRef = useCallback(
@@ -153,10 +167,106 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
     [close, onValueChange, options, value],
   );
 
+  useLayoutEffect(() => {
+    if (!open) {
+      setListboxPlacement(null);
+      return undefined;
+    }
+
+    const updateListboxPlacement = () => {
+      const trigger = triggerRef.current;
+      const listbox = listboxRef.current;
+      if (trigger === null || listbox === null) return;
+
+      const visualViewport = window.visualViewport;
+      const viewportLeft = visualViewport?.offsetLeft ?? 0;
+      const viewportTop = visualViewport?.offsetTop ?? 0;
+      const viewportWidth = visualViewport?.width ?? document.documentElement.clientWidth;
+      const viewportHeight = visualViewport?.height ?? document.documentElement.clientHeight;
+      const viewportRight = viewportLeft + viewportWidth;
+      const viewportBottom = viewportTop + viewportHeight;
+      const usableTop = viewportTop + LISTBOX_VIEWPORT_GUTTER;
+      const usableBottom = viewportBottom - LISTBOX_VIEWPORT_GUTTER;
+      const triggerRect = trigger.getBoundingClientRect();
+      const listboxStyle = getComputedStyle(listbox);
+      const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const borderTopWidth = Number.parseFloat(listboxStyle.borderTopWidth);
+      const borderBottomWidth = Number.parseFloat(listboxStyle.borderBottomWidth);
+      const canMeasureIntrinsicHeight =
+        viewportHeight > 0 &&
+        Number.isFinite(rootFontSize) &&
+        rootFontSize > 0 &&
+        Number.isFinite(borderTopWidth) &&
+        borderTopWidth >= 0 &&
+        Number.isFinite(borderBottomWidth) &&
+        borderBottomWidth >= 0 &&
+        Number.isFinite(listbox.scrollHeight) &&
+        listbox.scrollHeight > 0;
+      const preferredHeight = canMeasureIntrinsicHeight
+        ? Math.min(
+            listbox.scrollHeight + borderTopWidth + borderBottomWidth,
+            viewportHeight / 2,
+            rootFontSize * LISTBOX_MAX_HEIGHT_REM,
+          )
+        : undefined;
+      const maximumWidth = Math.max(0, viewportWidth - LISTBOX_VIEWPORT_GUTTER * 2);
+      const width = Math.min(triggerRect.width, maximumWidth);
+      const maximumLeft = Math.max(
+        viewportLeft + LISTBOX_VIEWPORT_GUTTER,
+        viewportRight - width - LISTBOX_VIEWPORT_GUTTER,
+      );
+      const left = Math.min(
+        Math.max(triggerRect.left, viewportLeft + LISTBOX_VIEWPORT_GUTTER),
+        maximumLeft,
+      );
+      const belowTop = Math.max(triggerRect.bottom + LISTBOX_TRIGGER_GAP, usableTop);
+      const belowHeight = Math.max(0, usableBottom - belowTop);
+      const aboveBottom = Math.min(triggerRect.top - LISTBOX_TRIGGER_GAP, usableBottom);
+      const aboveHeight = Math.max(0, aboveBottom - usableTop);
+      const placement =
+        preferredHeight === undefined ||
+        belowHeight >= preferredHeight ||
+        belowHeight >= aboveHeight
+          ? 'bottom'
+          : 'top';
+      const maxHeight =
+        preferredHeight === undefined
+          ? undefined
+          : Math.min(preferredHeight, placement === 'bottom' ? belowHeight : aboveHeight);
+      const top =
+        placement === 'bottom' || preferredHeight === undefined
+          ? belowTop
+          : Math.max(usableTop, aboveBottom - Math.min(preferredHeight, aboveHeight));
+      const nextPlacement: ListboxViewportPlacement = { left, top, width, maxHeight, placement };
+
+      setListboxPlacement((current) =>
+        current?.left === nextPlacement.left &&
+        current.top === nextPlacement.top &&
+        current.width === nextPlacement.width &&
+        current.maxHeight === nextPlacement.maxHeight &&
+        current.placement === nextPlacement.placement
+          ? current
+          : nextPlacement,
+      );
+    };
+
+    updateListboxPlacement();
+    const visualViewport = window.visualViewport;
+    window.addEventListener('resize', updateListboxPlacement);
+    visualViewport?.addEventListener('resize', updateListboxPlacement);
+    visualViewport?.addEventListener('scroll', updateListboxPlacement);
+    document.addEventListener('scroll', updateListboxPlacement, true);
+    return () => {
+      window.removeEventListener('resize', updateListboxPlacement);
+      visualViewport?.removeEventListener('resize', updateListboxPlacement);
+      visualViewport?.removeEventListener('scroll', updateListboxPlacement);
+      document.removeEventListener('scroll', updateListboxPlacement, true);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return undefined;
     listboxRef.current?.focus({ preventScroll: true });
-    listboxRef.current?.scrollIntoView?.({ block: 'nearest' });
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || !rootRef.current?.contains(event.target)) close();
     };
@@ -242,8 +352,20 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
             aria-label={typeof label === 'string' ? label : undefined}
             aria-activedescendant={activeOptionId}
             className={styles.listbox}
-            data-placement="bottom"
+            data-placement={listboxPlacement?.placement ?? 'bottom'}
             tabIndex={-1}
+            style={
+              listboxPlacement === null
+                ? undefined
+                : {
+                    left: listboxPlacement.left,
+                    top: listboxPlacement.top,
+                    width: listboxPlacement.width,
+                    ...(listboxPlacement.maxHeight === undefined
+                      ? {}
+                      : { maxHeight: listboxPlacement.maxHeight }),
+                  }
+            }
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown') {
                 event.preventDefault();
@@ -282,9 +404,8 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                onPointerDown={(event) => {
-                  if (event.button > 0) return;
-                  event.preventDefault();
+                onClick={(event) => {
+                  if (event.button !== 0) return;
                   select(index);
                 }}
               >

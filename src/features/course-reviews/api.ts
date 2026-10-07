@@ -7,6 +7,10 @@ import { ApiError, collectPaginationPages } from '@shared/api';
 export const REVIEW_PAGE_SIZE = 20 as const;
 export const COURSE_RATING_SUMMARY_MAXIMUM_PAGES = 10 as const;
 
+interface ReviewDeleteResponseCandidate {
+  readonly message?: unknown;
+}
+
 export interface CourseRatingSummary {
   readonly reviewCount: number;
   readonly averageRating: number | null;
@@ -137,7 +141,7 @@ export function deleteCourseReview(
         typeof value !== 'object' ||
         value === null ||
         Array.isArray(value) ||
-        (value as { message?: unknown }).message !== 'Review deleted'
+        (value as ReviewDeleteResponseCandidate).message !== 'Review deleted'
       )
         throw new TypeError('Invalid review delete response');
       return { message: 'Review deleted' };

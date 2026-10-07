@@ -40,6 +40,8 @@ interface ResultFixture {
 
 const temporaryPaths: string[] = [];
 const ciRun: CiRunIdentity = { runId: '4312', runAttempt: '2' };
+const deterministicReportLimitation =
+  'Report pass is deterministic evidence only; it is not a semantic or architectural Review or QA verdict.';
 const toolVersions: ToolVersions = {
   node: 'v20.19.1',
   npm: '10.8.2',
@@ -85,8 +87,14 @@ function lintStaticAnalysis(): CiGroupAnalysis {
   return {
     findings: [],
     suppressions: [],
-    advisory: { complexitySignals: [] },
-    configVersions: { reportSchema: 2, staticRules: 1 },
+    advisory: {
+      complexitySignals: [],
+      complexityReview: {
+        basis: 'independent-responsibilities',
+        guidance: 'Fixture preserves the required responsibility review contract.',
+      },
+    },
+    configVersions: { reportSchema: 3, staticRules: 2 },
   };
 }
 
@@ -150,8 +158,8 @@ async function createCliFixture(controlledProducer = false): Promise<CliFixture>
         '    hasUnexpectedDiagnostics: false,',
         '  }));',
         '}',
-        "export function qualityCommandPlan() { throw new Error('not used by controlled producer'); }",
-        "export function executeQualityCommand() { throw new Error('not used by controlled producer'); }",
+        "export function qualityCommandPlan({ mode, group }) { if (mode === 'full') return ['format', 'stylelint', 'lint', 'quality-lint', 'typecheck', 'static-rules', 'tests', 'build'].map((id) => ({ id })); if (mode === 'ci-group' && QUALITY_COMMAND_GROUPS[group]) return QUALITY_COMMAND_GROUPS[group].map((id) => ({ id })); throw new Error('unsupported controlled plan'); }",
+        "export function executeQualityCommand(entry) { return { command: { id: entry.id, status: 'pass', durationMs: 1, exitCode: 0, errorCode: null, diagnostics }, stdout: '', stderr: '', hasUnexpectedDiagnostics: false }; }",
       ].join('\n'),
       'utf8',
     );
@@ -161,6 +169,7 @@ async function createCliFixture(controlledProducer = false): Promise<CliFixture>
         "export async function collectStaticFindings() { return [{ category: 'controlled', file: 'scripts/quality/run-quality.mjs', line: 1, ruleId: 'CONTROLLED_FINDING', message: 'controlled finding' }]; }",
         'export function staticSuppressions() { return []; }',
         'export async function collectComplexitySignals() { return []; }',
+        "export const complexityReview = { basis: 'independent-responsibilities', guidance: 'Controlled fixture preserves the required responsibility review contract.' };",
       ].join('\n'),
       'utf8',
     );
@@ -309,6 +318,50 @@ afterAll(async () => {
 });
 
 describe('dependency-free CI quality CLI', () => {
+  it('emits the mandatory limitation in a constructed local full report', async () => {
+    const caseRoot = resolve(producerFixture.root, 'cases/local-limitation');
+    const output = resolve(caseRoot, 'quality-report.json');
+    const patch = resolve(caseRoot, 'review.patch');
+    await mkdir(resolve(producerFixture.root, 'src'), { recursive: true });
+    await mkdir(caseRoot, { recursive: true });
+    await writeFile(resolve(producerFixture.root, 'src/fixture.ts'), 'export const version = 2;\n');
+    await writeFile(
+      patch,
+      '--- a/src/fixture.ts\n+++ b/src/fixture.ts\n@@ -1 +1 @@\n-export const version = 1;\n+export const version = 2;\n',
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        producerFixture.runner,
+        '--scope',
+        'full',
+        '--target-patch',
+        patch,
+        '--target-root',
+        producerFixture.root,
+        '--base-root',
+        producerFixture.root,
+        '--output',
+        output,
+      ],
+      {
+        cwd: producerFixture.root,
+        encoding: 'utf8',
+        shell: false,
+        env: {
+          ...environmentWithoutNpmUserAgent(),
+          QUALITY_REPORT_ATTESTATION_KEY: 'controlled-local-attestation-key',
+        },
+      },
+    );
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
+    expect(existsSync(output), `${result.stdout}\n${result.stderr}`).toBe(true);
+    const report = JSON.parse(await readFile(output, 'utf8')) as { limitations: string[] };
+    expect(report.limitations).toContain(deterministicReportLimitation);
+  });
+
   it('assembles exact current-run receipts with only the HEAD lookup and passes both real gates', async () => {
     const result = await writeValidResults(fixture, 'positive');
     const tracePath = resolve(fixture.root, 'cases/positive/spawn-trace.jsonl');

@@ -20,6 +20,10 @@ import {
   type ApiClient,
   type ApiRequestOptions,
 } from '../../src/shared/api';
+import {
+  instructorCourseCollectionQueryPrefix,
+  type SessionCacheEpoch,
+} from '../../src/shared/api/query-keys';
 
 const instructor = {
   email: 'instructor@example.test',
@@ -70,14 +74,18 @@ async function renderPage(
   includeSessionReplacementControl = false,
   initialEntry = '/',
   locale: Locale = 'en',
+  sessionEpochRef?: SessionEpochRef,
 ) {
+  const queryClient = createAppQueryClient();
   await act(async () => {
     render(
-      <QueryClientProvider client={createAppQueryClient()}>
+      <QueryClientProvider client={queryClient}>
         <LocaleProvider initialLocale={locale}>
           <SessionProvider client={client} tokenStore={store}>
+            {sessionEpochRef ? <SessionEpochProbe epochRef={sessionEpochRef} /> : null}
             <MemoryRouter initialEntries={[initialEntry]}>
               {includeSessionReplacementControl ? <SessionReplacementControl /> : null}
+              {includeSessionReplacementControl ? <SessionEndControl /> : null}
               <LocationDisplay />
               <InstructorCoursesPage />
             </MemoryRouter>
@@ -86,6 +94,22 @@ async function renderPage(
       </QueryClientProvider>,
     );
   });
+  return queryClient;
+}
+
+interface SessionEpochRef {
+  current: SessionCacheEpoch | null;
+}
+
+function SessionEpochProbe({ epochRef }: { readonly epochRef: SessionEpochRef }) {
+  const { cacheEpoch } = useSession();
+  if (cacheEpoch) epochRef.current = cacheEpoch;
+  return null;
+}
+
+function capturedSessionEpoch(epochRef: SessionEpochRef): SessionCacheEpoch {
+  expect(epochRef.current).toEqual(expect.any(String));
+  return epochRef.current!;
 }
 
 function LocationDisplay() {
@@ -98,6 +122,15 @@ function SessionReplacementControl() {
   return (
     <button type="button" onClick={() => session.acceptAccessToken('replacement-token')}>
       Change instructor
+    </button>
+  );
+}
+
+function SessionEndControl() {
+  const session = useSession();
+  return (
+    <button type="button" onClick={() => session.clearSession()}>
+      End instructor session
     </button>
   );
 }
@@ -273,17 +306,26 @@ describe('InstructorCoursesPage', () => {
     const setTimeoutSpy = vi.spyOn(window, 'setTimeout');
     const createRequests: ApiRequestOptions[] = [];
     const collectionRequests: ApiRequestOptions[] = [];
+    const createdTitle = 'A'.repeat(255);
     const request: ApiClient['request'] = async (options) => {
       if (options.path === '/me') return decode(options, instructor);
       if (options.path === '/courses/my') {
         collectionRequests.push(options);
-        return decode(options, courseList);
+        return decode(
+          options,
+          collectionRequests.length === 1
+            ? courseList
+            : {
+                ...courseList,
+                items: [{ ...courseList.items[0], id: 7, title: createdTitle }],
+              },
+        );
       }
       createRequests.push(options);
       return decode(options, {
         id: 7,
         instructor_id: 3,
-        title: 'A'.repeat(255),
+        title: createdTitle,
         description: null,
         price: '0.00',
         currency: 'USD',
@@ -292,7 +334,16 @@ describe('InstructorCoursesPage', () => {
         updated_at: '2026-07-30T00:00:00Z',
       });
     };
-    await renderPage({ request });
+    const sessionEpochRef: SessionEpochRef = { current: null };
+    const queryClient = await renderPage(
+      { request },
+      tokenStore,
+      false,
+      '/',
+      'en',
+      sessionEpochRef,
+    );
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const user = userEvent.setup();
     expect(document.querySelector('[data-part="instructor-courses-hero"]')).toBeNull();
     const pageTitle = screen.getByRole('heading', { level: 1, name: 'Instructor courses' });
@@ -326,9 +377,8 @@ describe('InstructorCoursesPage', () => {
         .getByRole('menuitem', { name: 'Course enrollments' })
         .getAttribute('href'),
     ).toBe('/instructor/courses/17/enrollments');
-    expect(collectionRequests).toHaveLength(2);
+    expect(collectionRequests).toHaveLength(1);
     expect(collectionRequests.map((request) => request.query)).toEqual([
-      { page: 1, page_size: 20 },
       { page: 1, page_size: 20 },
     ]);
     expect(screen.queryByRole('textbox', { name: 'Course title' })).toBeNull();
@@ -338,11 +388,11 @@ describe('InstructorCoursesPage', () => {
     const createForm = title.closest('form');
     if (!createForm) throw new Error('Expected the create course form');
     await act(async () => {
-      await user.type(title, 'A'.repeat(255));
+      await user.type(title, createdTitle);
       await user.click(within(createForm).getByRole('button', { name: 'Create course' }));
     });
     await waitFor(() => expect(createRequests).toHaveLength(1));
-    expect(createRequests[0]?.body).toEqual({ title: 'A'.repeat(255) });
+    expect(createRequests[0]?.body).toEqual({ title: createdTitle });
     const newCourseActions = await screen.findByRole('navigation', { name: 'New course actions' });
     const collectionHeading = screen.getByRole('heading', { level: 2, name: 'Your courses' });
     await waitFor(() => expect(document.activeElement).toBe(collectionHeading));
@@ -356,7 +406,18 @@ describe('InstructorCoursesPage', () => {
       await user.click(screen.getByRole('button', { name: 'Dismiss notification' }));
     });
     expect(screen.queryByText('Course created')).toBeNull();
-    await waitFor(() => expect(collectionRequests).toHaveLength(3));
+    await waitFor(() => expect(collectionRequests).toHaveLength(2));
+    expect(collectionRequests[1]?.query).toEqual({ page: 1, page_size: 20 });
+    const epoch = capturedSessionEpoch(sessionEpochRef);
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: instructorCourseCollectionQueryPrefix(epoch),
+    });
+    const refreshedActions = await screen.findByRole('navigation', {
+      name: `${createdTitle} actions`,
+    });
+    expect(
+      within(refreshedActions).getByRole('link', { name: 'Edit course' }).getAttribute('href'),
+    ).toBe('/instructor/courses/7/edit');
   });
 
   it.each([
@@ -492,13 +553,26 @@ describe('InstructorCoursesPage', () => {
 
   it('offers the verified course deletion through the compact overflow menu and confirmation', async () => {
     const deleteRequests: ApiRequestOptions[] = [];
+    const collectionRequests: ApiRequestOptions[] = [];
     const request: ApiClient['request'] = async (options) => {
       if (options.path === '/me') return decode(options, instructor);
-      if (options.path === '/courses/my') return decode(options, courseList);
+      if (options.path === '/courses/my') {
+        collectionRequests.push(options);
+        return decode(options, collectionRequests.length === 1 ? courseList : emptyCourseList);
+      }
       deleteRequests.push(options);
       return decode(options, { message: 'deleted' });
     };
-    await renderPage({ request });
+    const sessionEpochRef: SessionEpochRef = { current: null };
+    const queryClient = await renderPage(
+      { request },
+      tokenStore,
+      false,
+      '/',
+      'en',
+      sessionEpochRef,
+    );
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const user = userEvent.setup();
     expect(await screen.findByText('Verified collection course')).toBeTruthy();
     expect(screen.queryByText('Returned by the instructor collection.')).toBeNull();
@@ -516,6 +590,13 @@ describe('InstructorCoursesPage', () => {
     });
     await waitFor(() => expect(deleteRequests).toHaveLength(1));
     expect(deleteRequests[0]?.path).toBe('/courses/17');
+    await waitFor(() => expect(collectionRequests).toHaveLength(2));
+    const epoch = capturedSessionEpoch(sessionEpochRef);
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: instructorCourseCollectionQueryPrefix(epoch),
+    });
+    expect(screen.queryByText('Verified collection course')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Verified collection course actions' })).toBeNull();
   });
 
   it('uses named arrow directions, preserves the verified query, and hides unavailable direction slots', async () => {
@@ -726,6 +807,25 @@ describe('InstructorCoursesPage', () => {
     expect(await screen.findByText('Verified collection course')).toBeTruthy();
   });
 
+  it('removes collection retry after a retained failure loses its private cache epoch', async () => {
+    const collectionRequests: ApiRequestOptions[] = [];
+    const request: ApiClient['request'] = async (options) => {
+      if (options.path === '/me') return decode(options, instructor);
+      collectionRequests.push(options);
+      throw new ApiError({ kind: 'server', status: 500, message: 'private' });
+    };
+    await renderPage({ request }, tokenStore, true);
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(collectionRequests).toHaveLength(1);
+
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'End instructor session' }));
+    });
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull());
+    expect(collectionRequests).toHaveLength(1);
+  });
+
   it('resets an unaddressable 422 collection page to page one before retrying', async () => {
     const collectionRequests: ApiRequestOptions[] = [];
     const request: ApiClient['request'] = async (options) => {
@@ -821,7 +921,7 @@ describe('InstructorCoursesPage', () => {
       fireEvent.submit(form);
       fireEvent.submit(form);
     });
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
     resolveCreate?.(
       new Response(
         JSON.stringify({
@@ -837,5 +937,9 @@ describe('InstructorCoursesPage', () => {
         }),
       ),
     );
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+    const refetchInput = fetch.mock.calls[3]?.[0];
+    const refetchUrl = refetchInput instanceof Request ? refetchInput.url : String(refetchInput);
+    expect(refetchUrl).toContain('/courses/my');
   });
 });

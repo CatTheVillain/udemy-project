@@ -335,6 +335,10 @@ const CART_PAGE_STYLES = readFileSync(
   pathToFileURL(resolve(process.cwd(), 'src/pages/cart-page/CartPage.module.css')),
   'utf8',
 );
+const CART_SUMMARY_JUMP_SOURCE = readFileSync(
+  pathToFileURL(resolve(process.cwd(), 'src/pages/cart-page/use-cart-summary-jump.ts')),
+  'utf8',
+);
 
 function cssDeclarationBlock(source: string, selectorStart: string): string {
   const selectorOffset = source.indexOf(selectorStart);
@@ -409,8 +413,10 @@ describe('CartPage', () => {
   });
 
   it('measures the summary jump from the structural Cart navigation seam, not localized copy', () => {
-    expect(CART_PAGE_SOURCE).toContain('querySelector<HTMLAnchorElement>(\'nav a[href="/cart"]\')');
-    expect(CART_PAGE_SOURCE).not.toContain('[aria-label="Student navigation"]');
+    expect(CART_SUMMARY_JUMP_SOURCE).toContain(
+      'querySelector<HTMLAnchorElement>(\'nav a[href="/cart"]\')',
+    );
+    expect(CART_SUMMARY_JUMP_SOURCE).not.toContain('[aria-label="Student navigation"]');
   });
 
   it.each([

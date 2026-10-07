@@ -26,12 +26,29 @@ interface ApplicationTitleBoundaryProps {
   children: ReactNode;
 }
 
+interface RenderErrorTitleState {
+  readonly kind: 'render-error';
+}
+interface BootstrappingTitleState {
+  readonly kind: 'bootstrapping';
+}
+interface SessionErrorTitleState {
+  readonly kind: 'session-error';
+}
+interface RegisteredRouteTitleState {
+  readonly kind: 'registered-route';
+  readonly routeTitle: string;
+}
+interface NotFoundTitleState {
+  readonly kind: 'not-found';
+}
+
 type ApplicationTitleState =
-  | { kind: 'render-error' }
-  | { kind: 'bootstrapping' }
-  | { kind: 'session-error' }
-  | { kind: 'registered-route'; routeTitle: string }
-  | { kind: 'not-found' };
+  | RenderErrorTitleState
+  | BootstrappingTitleState
+  | SessionErrorTitleState
+  | RegisteredRouteTitleState
+  | NotFoundTitleState;
 
 export class RenderErrorBoundary extends Component<RenderBoundaryProps, RenderBoundaryState> {
   state: RenderBoundaryState = { hasError: false };

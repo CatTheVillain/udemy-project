@@ -19,7 +19,7 @@ export async function startAuthWorkflowsViteServer(
       noDiscovery: true,
       include: ['react', 'react-dom/client', 'use-sync-external-store/shim'],
     },
-    server: { host: '127.0.0.1', port: 4175, strictPort: true },
+    server: { host: '127.0.0.1', port: 4175, strictPort: true, watch: null },
   });
   const { cleanup, waitWhileActive } = createViteServerLifecycle({
     close: () => server.close(),

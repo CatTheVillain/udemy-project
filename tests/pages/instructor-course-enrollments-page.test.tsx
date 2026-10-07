@@ -6,7 +6,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createAppQueryClient } from '../../src/app/query';
-import { SessionProvider, type AccessTokenStore } from '../../src/features/auth-session';
+import {
+  SessionProvider,
+  useSession,
+  type AccessTokenStore,
+} from '../../src/features/auth-session';
 import { InstructorCourseEnrollmentsPage } from '../../src/pages/instructor-course-enrollments-page';
 import { ApiError, type ApiClient, type ApiRequestOptions } from '../../src/shared/api';
 import { LocaleProvider, type Locale } from '../../src/shared/locale';
@@ -50,6 +54,7 @@ async function renderPage(
   token: string | null = 'instructor-token',
   initialEntry = '/instructor/courses/7/enrollments',
   locale: Locale = 'en',
+  includeSessionEndControl = false,
 ) {
   let view: ReturnType<typeof render> | undefined;
   await act(async () => {
@@ -58,6 +63,7 @@ async function renderPage(
         <LocaleProvider initialLocale={locale}>
           <SessionProvider client={{ request }} tokenStore={tokenStore(token)}>
             <MemoryRouter initialEntries={[initialEntry]}>
+              {includeSessionEndControl ? <SessionEndControl /> : null}
               <Routes>
                 <Route
                   path="/instructor/courses/:courseId/enrollments"
@@ -72,6 +78,15 @@ async function renderPage(
   });
   if (!view) throw new Error('Expected rendered roster page');
   return view;
+}
+
+function SessionEndControl() {
+  const session = useSession();
+  return (
+    <button type="button" onClick={() => session.clearSession()}>
+      End instructor session
+    </button>
+  );
 }
 
 function decode<TResponse, TBody>(
@@ -184,7 +199,11 @@ describe('InstructorCourseEnrollmentsPage', () => {
       rosterRequests.push(options);
       return decode(options, roster);
     };
-    await renderPage(request, null, '/instructor/courses/7/enrollments?page=9007199254740992');
+    await renderPage(
+      request,
+      'instructor-token',
+      '/instructor/courses/7/enrollments?page=9007199254740992',
+    );
     await screen.findByText('sam@example.test');
     expect(rosterRequests).toHaveLength(1);
     expect(rosterRequests[0]?.query).toEqual({ page: 1, page_size: 20 });
@@ -199,7 +218,7 @@ describe('InstructorCourseEnrollmentsPage', () => {
           resolve(decode(options, { ...roster, items: [], total: 0, pages: 0 }));
       });
     };
-    await renderPage(request, null);
+    await renderPage(request, 'instructor-token');
     expect(await screen.findByLabelText('Loading course enrollments')).toBeTruthy();
     await act(async () => {
       resolveRoster?.();
@@ -216,7 +235,7 @@ describe('InstructorCourseEnrollmentsPage', () => {
         signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
       });
     };
-    const view = await renderPage(request, null);
+    const view = await renderPage(request, 'instructor-token');
     await waitFor(() => expect(signal).toBeDefined());
     expect(signal?.aborted).toBe(false);
     await act(async () => {
@@ -274,5 +293,24 @@ describe('InstructorCourseEnrollmentsPage', () => {
       await userEvent.setup().keyboard('{Enter}');
     });
     await waitFor(() => expect(screen.getByText('sam@example.test')).toBeTruthy());
+  });
+
+  it('removes roster retry after a retained failure loses its private cache epoch', async () => {
+    const rosterRequests: ApiRequestOptions[] = [];
+    const request: ApiClient['request'] = async (options) => {
+      if (options.path === '/me') return decode(options, instructor);
+      rosterRequests.push(options);
+      throw new ApiError({ kind: 'offline', status: null, message: 'private' });
+    };
+    await renderPage(request, 'instructor-token', undefined, 'en', true);
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(rosterRequests).toHaveLength(1);
+
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'End instructor session' }));
+    });
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull());
+    expect(rosterRequests).toHaveLength(1);
   });
 });

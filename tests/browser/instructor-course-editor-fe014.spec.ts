@@ -1,6 +1,11 @@
 import { Buffer } from 'node:buffer';
 
 import { expect, test, type Page, type Request, type Route } from '@playwright/test';
+import {
+  createHttpFailureAccounting,
+  findUnexpectedConsoleErrors,
+  type ConsoleErrorEvidence,
+} from './support/visual-quality';
 
 const accessToken = 'fe014-test-only-instructor-token';
 const courseId = 7;
@@ -38,6 +43,8 @@ interface LessonFixture {
   readonly download_url: string | null;
   readonly description: string | null;
   readonly is_published: boolean;
+  readonly created_at: string;
+  readonly updated_at: string;
 }
 
 interface InstructorSummaryFixture {
@@ -52,6 +59,9 @@ interface CourseFixture {
   readonly description: string | null;
   readonly price: string;
   readonly currency: string;
+  readonly published_at: null;
+  readonly created_at: string;
+  readonly updated_at: string;
   readonly instructor: InstructorSummaryFixture;
   readonly lessons: readonly LessonFixture[];
 }
@@ -113,6 +123,8 @@ function createLesson(type: LessonFixture['lesson_type'] = 'video'): LessonFixtu
     download_url: null,
     description: 'An instructor-owned lesson for browser verification.',
     is_published: false,
+    created_at: '2026-08-08T00:00:00Z',
+    updated_at: '2026-08-08T00:00:00Z',
   };
 }
 
@@ -123,6 +135,9 @@ function createCourse(lessons: readonly LessonFixture[]): CourseFixture {
     description: 'An instructor-owned course for browser verification.',
     price: '20.00',
     currency: 'USD',
+    published_at: null,
+    created_at: '2026-08-08T00:00:00Z',
+    updated_at: '2026-08-08T00:00:00Z',
     instructor: { id: 3, name: 'Indira', surname: 'Instructor' },
     lessons,
   };
@@ -168,6 +183,8 @@ function fulfilledCourse(course: CourseFixture) {
       download_url: lesson.download_url,
       description: lesson.description,
       is_published: lesson.is_published,
+      created_at: lesson.created_at,
+      updated_at: lesson.updated_at,
     })),
   };
 }
@@ -394,6 +411,8 @@ async function installInstructorFixture(page: Page, state: FixtureState): Promis
         download_url: null,
         description: body.description as string | null,
         is_published: body.is_published as boolean,
+        created_at: '2026-08-08T00:00:00Z',
+        updated_at: '2026-08-08T00:00:00Z',
       };
       state.course = { ...state.course, lessons: [...state.course.lessons, createdLesson] };
       await fulfillJson(route, 200, createdLesson);
@@ -493,21 +512,131 @@ async function uploadFixtureFile(page: Page): Promise<void> {
   await uploadButton.click();
 }
 
-const browserErrors = new WeakMap<Page, string[]>();
+interface HttpDiagnostic {
+  readonly method: string;
+  readonly pathAndQuery: string;
+  readonly status: number;
+  readonly url: string;
+}
+
+interface BrowserDiagnostics {
+  readonly pageErrors: string[];
+  readonly consoleErrors: ConsoleErrorEvidence[];
+  readonly requestFailures: string[];
+  readonly relevantHttp: HttpDiagnostic[];
+}
+
+interface ExpectedNegativeHttp {
+  readonly method: string;
+  readonly pathAndQuery: string;
+  readonly status: number;
+  readonly count: number;
+}
+
+const browserDiagnostics = new WeakMap<Page, BrowserDiagnostics>();
+
+const expectedNegativeHttpByScenario: Readonly<Record<string, readonly ExpectedNegativeHttp[]>> = {
+  'uses authenticated course PATCH and lesson POST contracts, including safe 422 focus': [
+    { method: 'PATCH', pathAndQuery: '/courses/7', status: 422, count: 1 },
+    { method: 'POST', pathAndQuery: '/courses/7/lessons', status: 422, count: 1 },
+  ],
+  'confirms named destructive actions and restores keyboard focus on cancel': [
+    { method: 'DELETE', pathAndQuery: '/courses/7/lessons/101', status: 404, count: 1 },
+  ],
+  'announces truthful pending course and lesson deletes without duplicate mutations': [
+    { method: 'DELETE', pathAndQuery: '/courses/7/lessons/101', status: 404, count: 1 },
+  ],
+  'clears a pending destructive confirmation when its request ends the session': [
+    { method: 'DELETE', pathAndQuery: '/courses/7', status: 401, count: 1 },
+  ],
+  'uses lesson PATCH and contract-faithful multipart upload without terminal or replacement UI': [
+    { method: 'PATCH', pathAndQuery: '/lessons/101', status: 422, count: 1 },
+  ],
+  'renders safe upload errors and keeps controls responsive under reduced motion': [
+    { method: 'POST', pathAndQuery: '/lessons/101/upload-file', status: 422, count: 1 },
+  ],
+  'settles deferred course and upload failures in the locale selected while pending': [
+    { method: 'PATCH', pathAndQuery: '/courses/7', status: 422, count: 1 },
+    { method: 'POST', pathAndQuery: '/lessons/101/upload-file', status: 422, count: 1 },
+  ],
+};
+
+function assertBrowserDiagnostics(
+  diagnostics: BrowserDiagnostics,
+  expectedNegativeHttp: readonly ExpectedNegativeHttp[] = [],
+) {
+  expect(diagnostics.pageErrors, 'unexpected page errors').toEqual([]);
+  expect(diagnostics.requestFailures, 'unexpected request failures').toEqual([]);
+  const actualNegativeHttp = diagnostics.relevantHttp.filter((response) => response.status >= 400);
+  const expected = expectedNegativeHttp.flatMap(({ count, ...response }) =>
+    Array.from({ length: count }, () => response),
+  );
+  expect(
+    actualNegativeHttp.map(({ method, pathAndQuery, status }) => ({
+      method,
+      pathAndQuery,
+      status,
+    })),
+    'unexpected relevant HTTP failures',
+  ).toEqual(expected);
+
+  const negativeHttpAccounting = createHttpFailureAccounting();
+  expectedNegativeHttp.forEach(({ count, pathAndQuery, ...response }) => {
+    negativeHttpAccounting.allow({ ...response, path: pathAndQuery }, count);
+  });
+  diagnostics.relevantHttp.forEach(({ method, status, url }) => {
+    negativeHttpAccounting.observe(method, url, status);
+  });
+  expect(
+    findUnexpectedConsoleErrors(
+      diagnostics.consoleErrors,
+      negativeHttpAccounting.acceptedFailures(),
+    ),
+    'unexpected console errors',
+  ).toEqual([]);
+}
 
 test.beforeEach(async ({ page }) => {
-  const errors: string[] = [];
-  browserErrors.set(page, errors);
-  page.on('pageerror', (error) => errors.push(error.stack ?? error.message));
+  const diagnostics: BrowserDiagnostics = {
+    pageErrors: [],
+    consoleErrors: [],
+    requestFailures: [],
+    relevantHttp: [],
+  };
+  browserDiagnostics.set(page, diagnostics);
+  page.on('pageerror', (error) => diagnostics.pageErrors.push(error.stack ?? error.message));
   page.on('console', (message) => {
-    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource')) {
-      errors.push(message.text());
+    if (message.type() === 'error') {
+      diagnostics.consoleErrors.push({ text: message.text(), url: message.location().url });
     }
+  });
+  page.on('requestfailed', (request) => {
+    diagnostics.requestFailures.push(
+      `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ''}`,
+    );
+  });
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    if (url.hostname !== '127.0.0.1') return;
+    diagnostics.relevantHttp.push({
+      method: response.request().method(),
+      pathAndQuery: `${url.pathname}${url.search}`,
+      status: response.status(),
+      url: response.url(),
+    });
   });
 });
 
-test.afterEach(async ({ page }) => {
-  expect(browserErrors.get(page), 'unexpected browser runtime errors').toEqual([]);
+test.afterEach(async ({ page }, testInfo) => {
+  assertBrowserDiagnostics(
+    browserDiagnostics.get(page) ?? {
+      pageErrors: ['missing browser diagnostic monitor'],
+      consoleErrors: [],
+      requestFailures: [],
+      relevantHttp: [],
+    },
+    expectedNegativeHttpByScenario[testInfo.title] ?? [],
+  );
 });
 
 async function expectInstructorCanvasToMeetFooter(page: Page) {
@@ -590,9 +719,11 @@ test('creates a PDF lesson and then uploads its optional source file', async ({ 
   await page.goto(`/instructor/courses/${courseId}/edit`, { waitUntil: 'commit' });
 
   await page.getByRole('button', { name: 'Add lesson' }).click();
+  await expect(page.getByText('MP4, WebM, or MOV up to 150 MB.', { exact: true })).toBeVisible();
   await page.getByLabel('Lesson title').fill('PDF created with source');
   await page.getByRole('combobox', { name: 'Lesson type' }).click();
   await page.getByRole('option', { name: 'PDF' }).click();
+  await expect(page.getByText('PDF up to 50 MB.', { exact: true })).toBeVisible();
   await page.getByLabel('Lesson file (optional)').setInputFiles({
     name: 'browser-notes.pdf',
     mimeType: 'application/pdf',
@@ -855,6 +986,31 @@ test('announces truthful pending course and lesson deletes without duplicate mut
   await expect(page).toHaveURL(/\/instructor\/courses$/);
 });
 
+test('clears a pending destructive confirmation when its request ends the session', async ({
+  page,
+}) => {
+  const state = createFixtureState();
+  const deleteGate = deferredAction();
+  state.courseDeleteGate = deleteGate.promise;
+  state.courseDeleteStatus = 401;
+  await installInstructorFixture(page, state);
+  await page.goto(`/instructor/courses/${courseId}/edit`, { waitUntil: 'commit' });
+
+  await page.getByRole('button', { name: 'Delete course' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Delete this course?' });
+  await dialog.getByRole('button', { name: 'Delete course' }).click();
+  await expect(dialog.getByRole('button', { name: 'Deleting course...' })).toBeDisabled();
+  await expect
+    .poll(() => state.requests.filter((request) => request.method() === 'DELETE'))
+    .toHaveLength(1);
+
+  deleteGate.resolve();
+
+  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  expect(state.requests.filter((request) => request.method() === 'DELETE')).toHaveLength(1);
+});
+
 test('keeps Save lesson primary styling, geometry, and label stable without a pending spinner', async ({
   page,
 }) => {
@@ -999,6 +1155,33 @@ test('uses lesson PATCH and contract-faithful multipart upload without terminal 
   ).toHaveCount(0);
   await expect(page.getByText(/progress|ready|complete|replacement/i)).toHaveCount(0);
   expect(api032RequestCount(state.requests)).toBe(uploadRequestsBeforeTypeChanges + 1);
+});
+
+test('keeps the persisted lesson type upload rule while an unsaved type change is pending', async ({
+  page,
+}) => {
+  const state = createFixtureState();
+  await installInstructorFixture(page, state);
+  await page.goto(`/instructor/lessons/${lessonId}/edit`, { waitUntil: 'commit' });
+
+  const lessonFile = page.locator('input[name="file"]');
+  await expect(lessonFile).toHaveAttribute('accept', '.mp4,.webm,.mov');
+
+  await page.getByRole('combobox', { name: 'Lesson type' }).click();
+  await page.getByRole('option', { name: 'PDF' }).click();
+  await expect(page.getByRole('button', { name: 'Save lesson' })).toBeVisible();
+  await expect(lessonFile).toHaveAttribute('accept', '.mp4,.webm,.mov');
+
+  await lessonFile.setInputFiles({
+    name: 'unsaved-type-change.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('pdf'),
+  });
+  await expect(
+    page.getByText('Choose a file that matches the stated type and size limit.'),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Upload file' })).toBeDisabled();
+  expect(api032RequestCount(state.requests)).toBe(0);
 });
 
 test('renders every correlated upload observation state safely across English, Russian, and Uzbek', async ({
@@ -1262,7 +1445,17 @@ test('keeps every hostile lesson title literal in the destructive dialog and del
 
     const requestCount = state.requests.filter((request) => request.method() === 'DELETE').length;
     await deleteLesson.click();
+    const deleteResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' &&
+        new URL(response.url()).pathname === `/courses/${courseId}/lessons/${lessonId}` &&
+        response.status() === 200,
+    );
     await page.getByRole('button', { name: 'Delete lesson' }).last().click();
+    const deleteFailure = await (await deleteResponse).finished();
+    if (deleteFailure !== null) {
+      throw new Error(`Lesson delete response did not finish: ${deleteFailure}`);
+    }
     await expect
       .poll(() => state.requests.filter((request) => request.method() === 'DELETE').length)
       .toBe(requestCount + 1);
@@ -1393,4 +1586,445 @@ test('localizes instructor course lesson-list types without changing lesson writ
   }
 
   expect(state.requests.filter((request) => request.method() !== 'GET')).toEqual([]);
+});
+
+test('rejects an ERR_ABORTED diagnostic through the fail-closed monitor control', () => {
+  expect(() =>
+    assertBrowserDiagnostics({
+      pageErrors: [],
+      consoleErrors: [],
+      requestFailures: ['GET http://127.0.0.1:4174/fixture net::ERR_ABORTED'],
+      relevantHttp: [],
+    }),
+  ).toThrow();
+});
+
+test('accounts for exact expected-negative HTTP console diagnostics through the local monitor', () => {
+  const expected = [{ method: 'PATCH', pathAndQuery: '/courses/7', status: 422, count: 1 }];
+  const response = {
+    method: 'PATCH',
+    pathAndQuery: '/courses/7',
+    status: 422,
+    url: 'http://127.0.0.1:4174/courses/7',
+  };
+  const failedResource = 'Failed to load resource: the server responded with a status of 422';
+
+  expect(() =>
+    assertBrowserDiagnostics(
+      {
+        pageErrors: [],
+        consoleErrors: [{ text: failedResource, url: response.url }],
+        requestFailures: [],
+        relevantHttp: [response],
+      },
+      expected,
+    ),
+  ).not.toThrow();
+  expect(() =>
+    assertBrowserDiagnostics(
+      {
+        pageErrors: [],
+        consoleErrors: [{ text: failedResource, url: 'http://127.0.0.1:4174/other' }],
+        requestFailures: [],
+        relevantHttp: [response],
+      },
+      expected,
+    ),
+  ).toThrow();
+  expect(() =>
+    assertBrowserDiagnostics(
+      {
+        pageErrors: [],
+        consoleErrors: [
+          {
+            text: 'Failed to load resource: the server responded with a status of 401',
+            url: response.url,
+          },
+        ],
+        requestFailures: [],
+        relevantHttp: [response],
+      },
+      expected,
+    ),
+  ).toThrow();
+  expect(() =>
+    assertBrowserDiagnostics(
+      {
+        pageErrors: [],
+        consoleErrors: [
+          { text: failedResource, url: response.url },
+          { text: failedResource, url: response.url },
+        ],
+        requestFailures: [],
+        relevantHttp: [response],
+      },
+      expected,
+    ),
+  ).toThrow();
+  expect(() =>
+    assertBrowserDiagnostics(
+      { pageErrors: [], consoleErrors: [], requestFailures: [], relevantHttp: [response] },
+      [],
+    ),
+  ).toThrow();
+  expect(() =>
+    assertBrowserDiagnostics(
+      { pageErrors: [], consoleErrors: [], requestFailures: [], relevantHttp: [] },
+      expected,
+    ),
+  ).toThrow();
+});
+
+async function discoverPrimitiveModuleUrls(page: Page) {
+  const moduleUrls = await page.evaluate(async () => {
+    const urls = {
+      dialog: new URL('/src/shared/ui/primitives/Dialog.tsx', location.origin).href,
+      select: new URL('/src/shared/ui/primitives/Select.tsx', location.origin).href,
+      locale: new URL('/src/shared/locale/LocaleProvider.tsx', location.origin).href,
+      main: new URL('/src/main.tsx', location.origin).href,
+    };
+    const sources = await Promise.all(
+      Object.entries(urls).map(
+        async ([key, url]) => [key, await (await fetch(url)).text()] as const,
+      ),
+    );
+    const sourceByKey = Object.fromEntries(sources);
+    const resolveImport = (source: string, from: string, matcher: RegExp) => {
+      const match = source.match(matcher);
+      return match ? new URL(match[1]!, from).href : null;
+    };
+    const react = resolveImport(
+      sourceByKey.select,
+      urls.select,
+      /from\s+["']([^"']*react(?:\.js)?[^"']*)["']/u,
+    );
+    const reactDomClient = resolveImport(
+      sourceByKey.main,
+      urls.main,
+      /from\s+["']([^"']*react-dom[^"']*)["']/u,
+    );
+    const reactImports = [urls.dialog, urls.select, urls.locale].map((url) =>
+      resolveImport(
+        sourceByKey[url === urls.dialog ? 'dialog' : url === urls.select ? 'select' : 'locale'],
+        url,
+        /from\s+["']([^"']*react(?:\.js)?[^"']*)["']/u,
+      ),
+    );
+    return { ...urls, react, reactDomClient, reactImports };
+  });
+  expect(moduleUrls.react, 'Select transformed source React dependency').toBeTruthy();
+  expect(moduleUrls.reactDomClient, 'main transformed source ReactDOM dependency').toBeTruthy();
+  expect(moduleUrls.reactImports).toEqual([moduleUrls.react, moduleUrls.react, moduleUrls.react]);
+  return { ...moduleUrls, react: moduleUrls.react!, reactDomClient: moduleUrls.reactDomClient! };
+}
+
+test('proves real Vite-graph Dialog and Select touch cancellation, scroll, and focus boundaries', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/login', { waitUntil: 'commit' });
+  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+  const moduleUrls = await discoverPrimitiveModuleUrls(page);
+
+  await page.evaluate(async (urls) => {
+    const [reactModule, ReactDomClient, dialogModule, selectModule, localeModule] =
+      await Promise.all([
+        import(urls.react),
+        import(urls.reactDomClient),
+        import(urls.dialog),
+        import(urls.select),
+        import(urls.locale),
+      ]);
+    const host = document.createElement('div');
+    host.dataset.testPrimitiveFixture = 'true';
+    document.body.append(host);
+    const changes: string[] = [];
+    const Select = selectModule.Select;
+    const Dialog = dialogModule.Dialog;
+    const LocaleProvider = localeModule.LocaleProvider;
+    const React = reactModule.default ?? reactModule;
+    const createRoot = ReactDomClient.createRoot ?? ReactDomClient.default?.createRoot;
+    if (
+      typeof createRoot !== 'function' ||
+      typeof React.createElement !== 'function' ||
+      typeof React.useState !== 'function' ||
+      React.Fragment === undefined
+    ) {
+      throw new Error(
+        `Served React runtime lacks fixture APIs: ${Object.keys(reactModule).join(',')}; ReactDOM: ${Object.keys(ReactDomClient).join(',')}`,
+      );
+    }
+    const Fixture = () => {
+      const [outerOpen, setOuterOpen] = React.useState(false);
+      const [innerOpen, setInnerOpen] = React.useState(false);
+      const options = Array.from({ length: 36 }, (_, index) =>
+        React.createElement(
+          'option',
+          { key: `option-${index}`, value: `option-${index}`, disabled: index === 2 },
+          `Option ${index}`,
+        ),
+      );
+      const longDialogContent = Array.from({ length: 24 }, (_, index) =>
+        React.createElement(
+          'p',
+          { key: `long-dialog-content-${index}` },
+          `Long dialog fixture content ${index + 1}.`,
+        ),
+      );
+      return React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(
+          'button',
+          { type: 'button', onClick: () => setOuterOpen(true) },
+          'Open outer primitive dialog',
+        ),
+        React.createElement(
+          Dialog,
+          { open: outerOpen, title: 'Outer primitive dialog', onClose: () => setOuterOpen(false) },
+          React.createElement(
+            'button',
+            { type: 'button', onClick: () => setInnerOpen(true) },
+            'Open inner primitive dialog',
+          ),
+          React.createElement(
+            Dialog,
+            {
+              open: innerOpen,
+              title: 'Inner primitive dialog',
+              onClose: () => setInnerOpen(false),
+            },
+            ...longDialogContent,
+            React.createElement(
+              Select,
+              {
+                label: 'Fixture lesson type',
+                defaultValue: 'option-0',
+                onValueChange: (value: string) => changes.push(value),
+              },
+              options,
+            ),
+          ),
+        ),
+      );
+    };
+    const root = createRoot(host);
+    root.render(
+      React.createElement(LocaleProvider, { initialLocale: 'en' }, React.createElement(Fixture)),
+    );
+    Object.assign(window, {
+      __fe014PrimitiveFixture: {
+        changes,
+        cleanup: () => {
+          root.unmount();
+          host.remove();
+          delete (window as typeof window & { __fe014PrimitiveFixture?: unknown })
+            .__fe014PrimitiveFixture;
+        },
+      },
+    });
+  }, moduleUrls);
+
+  try {
+    const outerInvoker = page.getByRole('button', { name: 'Open outer primitive dialog' });
+    await outerInvoker.click();
+    const outer = page.getByRole('dialog', { name: 'Outer primitive dialog' });
+    await expect(outer).toBeVisible();
+    const outerElement = await outer.elementHandle();
+    if (!outerElement) throw new Error('Outer primitive dialog did not mount.');
+    const innerInvoker = outer.getByRole('button', { name: 'Open inner primitive dialog' });
+    await innerInvoker.click();
+    const inner = page.getByRole('dialog', { name: 'Inner primitive dialog' });
+    await expect(inner).toBeVisible();
+    await expect.poll(() => outerElement.getAttribute('aria-hidden')).toBe('true');
+
+    const trigger = inner.getByRole('combobox', { name: 'Fixture lesson type' });
+    expect(
+      await inner.evaluate((element) => element.scrollHeight > element.clientHeight),
+      'inner primitive dialog must expose its long-content overflow',
+    ).toBe(true);
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.click();
+    const listbox = page.getByRole('listbox', { name: 'Fixture lesson type' });
+    const initialScrollTop = await listbox.evaluate((element) => element.scrollTop);
+    let box = await listbox.boundingBox();
+    if (!box) throw new Error('Fixture listbox geometry is unavailable.');
+    let scrollPoint = { x: box.x + box.width / 2, y: box.y + box.height - 12 };
+    await expect
+      .poll(() =>
+        page.evaluate(({ x, y }) => {
+          const listbox = document.querySelector('[role="listbox"]');
+          const hit = document.elementFromPoint(x, y);
+          return Boolean(listbox && hit && listbox.contains(hit));
+        }, scrollPoint),
+      )
+      .toBe(true);
+    const dialogScrollTop = await inner.evaluate((element) => element.scrollTop);
+    expect(dialogScrollTop, 'long dialog must have an observable scroll position').toBeGreaterThan(
+      0,
+    );
+    await inner.evaluate((element) => element.scrollBy({ top: -Math.min(element.scrollTop, 16) }));
+    await expect
+      .poll(() => inner.evaluate((element) => element.scrollTop))
+      .toBeLessThan(dialogScrollTop);
+    await expect(listbox).toBeVisible();
+    box = await listbox.boundingBox();
+    if (!box) throw new Error('Long-dialog fixture listbox geometry is unavailable.');
+    scrollPoint = { x: box.x + box.width / 2, y: box.y + box.height - 12 };
+    await expect(
+      page.evaluate(({ x, y }) => {
+        const listbox = document.querySelector('[role="listbox"]');
+        const hit = document.elementFromPoint(x, y);
+        return Boolean(listbox && hit && listbox.contains(hit));
+      }, scrollPoint),
+    ).resolves.toBe(true);
+    await expect(inner).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await expect(
+      page.evaluate(
+        () =>
+          (window as typeof window & { __fe014PrimitiveFixture: { changes: string[] } })
+            .__fe014PrimitiveFixture.changes,
+      ),
+    ).resolves.toEqual([]);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ ...scrollPoint, id: 1 }],
+    });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: box.x + box.width / 2, y: box.y + 12, id: 1 }],
+    });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect
+      .poll(() => listbox.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(initialScrollTop);
+    await expect(listbox).toBeVisible();
+    await expect(inner).toBeVisible();
+    await expect(
+      page.evaluate(
+        () =>
+          (window as typeof window & { __fe014PrimitiveFixture: { changes: string[] } })
+            .__fe014PrimitiveFixture.changes,
+      ),
+    ).resolves.toEqual([]);
+
+    await page.getByRole('option', { name: 'Option 0' }).scrollIntoViewIfNeeded();
+    const option = page.getByRole('option', { name: 'Option 0' });
+    const optionBox = await option.boundingBox();
+    if (!optionBox) throw new Error('Fixture option geometry is unavailable.');
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [
+        { x: optionBox.x + optionBox.width / 2, y: optionBox.y + optionBox.height / 2, id: 2 },
+      ],
+    });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+    await expect(
+      page.evaluate(
+        () =>
+          (window as typeof window & { __fe014PrimitiveFixture: { changes: string[] } })
+            .__fe014PrimitiveFixture.changes,
+      ),
+    ).resolves.toEqual([]);
+    await expect(listbox).toBeVisible();
+    await expect(inner).toBeVisible();
+
+    await page.getByRole('option', { name: 'Option 2', exact: true }).click({ force: true });
+    await expect(
+      page.evaluate(
+        () =>
+          (window as typeof window & { __fe014PrimitiveFixture: { changes: string[] } })
+            .__fe014PrimitiveFixture.changes,
+      ),
+    ).resolves.toEqual([]);
+    await expect(listbox).toBeVisible();
+
+    await page.getByRole('option', { name: 'Option 1', exact: true }).click();
+    await expect(
+      page.evaluate(
+        () =>
+          (window as typeof window & { __fe014PrimitiveFixture: { changes: string[] } })
+            .__fe014PrimitiveFixture.changes,
+      ),
+    ).resolves.toEqual(['option-1']);
+    await expect(inner).toBeVisible();
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await expect(listbox).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(listbox).toHaveCount(0);
+    await expect(inner).toBeVisible();
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    await expect(listbox).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(listbox).toHaveCount(0);
+    await expect(inner).toBeVisible();
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(inner).toHaveCount(0);
+    await expect(innerInvoker).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(outer).toHaveCount(0);
+    await expect(outerInvoker).toBeFocused();
+
+    await outerInvoker.click();
+    const resizedOuter = page.getByRole('dialog', {
+      name: 'Outer primitive dialog',
+      includeHidden: true,
+    });
+    await innerInvoker.click();
+    await trigger.click();
+    await page.setViewportSize({ width: 640, height: 900 });
+    await expect(listbox).toBeVisible();
+    const resizedBox = await listbox.boundingBox();
+    if (!resizedBox) throw new Error('Resized fixture listbox geometry is unavailable.');
+    await expect(
+      page.evaluate(
+        ({ x, y }) => {
+          const listbox = document.querySelector('[role="listbox"]');
+          const hit = document.elementFromPoint(x, y);
+          return Boolean(listbox && hit && listbox.contains(hit));
+        },
+        { x: resizedBox.x + resizedBox.width / 2, y: resizedBox.y + 12 },
+      ),
+    ).resolves.toBe(true);
+    await expectNoHorizontalOverflow(page);
+    await expect(resizedOuter).toHaveAttribute('aria-hidden', 'true');
+  } finally {
+    let cleanup:
+      | {
+          fixtureHosts: number;
+          dialogs: number;
+          loginAvailable: boolean;
+          loginInert: boolean;
+        }
+      | undefined;
+    try {
+      cleanup = await page.evaluate(() => {
+        (
+          window as typeof window & { __fe014PrimitiveFixture?: { cleanup(): void } }
+        ).__fe014PrimitiveFixture?.cleanup();
+        const loginEmail = document.querySelector('input[name="email"]');
+        return {
+          fixtureHosts: document.querySelectorAll('[data-test-primitive-fixture="true"]').length,
+          dialogs: document.querySelectorAll('[role="dialog"]').length,
+          loginAvailable: loginEmail !== null,
+          loginInert: loginEmail?.closest('[inert]') !== null,
+        };
+      });
+    } finally {
+      await cdp.detach();
+    }
+    expect(cleanup, 'primitive fixture cleanup').toEqual({
+      fixtureHosts: 0,
+      dialogs: 0,
+      loginAvailable: true,
+      loginInert: false,
+    });
+    const loginEmail = page.locator('input[name="email"]');
+    await loginEmail.focus();
+    await expect(loginEmail).toBeFocused();
+  }
 });

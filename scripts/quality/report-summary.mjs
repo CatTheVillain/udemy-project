@@ -30,7 +30,7 @@ export function summaryFor(report) {
     `outcome=${report.outcome} commands=${report.commands.length} failed=${failed.join(',') || 'none'}`,
     `diagnostics=allowed-router:${diagnostics} unexpected:${unexpectedDiagnostics}`,
     `diagnostic-counts=${diagnosticCounts}`,
-    `findings=${report.findings.length} suppressions=${report.suppressions.length} advisory-complexity-signals=${report.advisory.complexitySignals.length}`,
+    `findings=${report.findings.length} suppressions=${report.suppressions.length} advisory-complexity-signals=${report.advisory.complexitySignals.length} advisory-complexity-review=${report.advisory.complexityReview.basis}`,
   ].join('\n');
 }
 

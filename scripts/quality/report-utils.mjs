@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const REPORT_SCHEMA_VERSION = 2;
+export const REPORT_SCHEMA_VERSION = 3;
 export const REPORT_CLOCK_SKEW_TOLERANCE_MINUTES = 5;
 export const REQUIRED_QUALITY_COMMAND_IDS = Object.freeze([
   'format',

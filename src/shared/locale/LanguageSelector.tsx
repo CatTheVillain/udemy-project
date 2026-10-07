@@ -25,7 +25,7 @@ export interface LanguageSelectorProps {
   readonly exclusiveDisclosure?: ExclusiveDisclosureControl;
 }
 
-type HoverCloseTimer = ReturnType<typeof setTimeout>;
+type HoverCloseTimer = number;
 type LanguageSelectorOpenMode = 'hover' | 'persistent' | null;
 
 const FINE_HOVER_QUERY = '(hover: hover) and (pointer: fine)';
@@ -51,7 +51,7 @@ export function LanguageSelector({
 
   function cancelHoverClose() {
     if (hoverCloseTimerRef.current === null) return;
-    clearTimeout(hoverCloseTimerRef.current);
+    window.clearTimeout(hoverCloseTimerRef.current);
     hoverCloseTimerRef.current = null;
   }
 
@@ -80,7 +80,7 @@ export function LanguageSelector({
   function closeAfterHover(event: ReactPointerEvent<HTMLDivElement>) {
     if (!supportsHover(event) || openModeRef.current !== 'hover') return;
     cancelHoverClose();
-    hoverCloseTimerRef.current = setTimeout(() => {
+    hoverCloseTimerRef.current = window.setTimeout(() => {
       hoverCloseTimerRef.current = null;
       openModeRef.current = null;
       setOpen(false);
@@ -97,7 +97,7 @@ export function LanguageSelector({
 
   useEffect(
     () => () => {
-      if (hoverCloseTimerRef.current !== null) clearTimeout(hoverCloseTimerRef.current);
+      if (hoverCloseTimerRef.current !== null) window.clearTimeout(hoverCloseTimerRef.current);
     },
     [],
   );
@@ -105,7 +105,7 @@ export function LanguageSelector({
   useEffect(() => {
     if (!exclusiveDisclosure?.closeRequested) return;
     if (hoverCloseTimerRef.current !== null) {
-      clearTimeout(hoverCloseTimerRef.current);
+      window.clearTimeout(hoverCloseTimerRef.current);
       hoverCloseTimerRef.current = null;
     }
     openModeRef.current = null;
@@ -127,7 +127,7 @@ export function LanguageSelector({
     function dismissOnOutsideFocus(event: FocusEvent) {
       if (ref.current?.contains(event.target as Node)) return;
       if (hoverCloseTimerRef.current !== null) {
-        clearTimeout(hoverCloseTimerRef.current);
+        window.clearTimeout(hoverCloseTimerRef.current);
         hoverCloseTimerRef.current = null;
       }
       openModeRef.current = null;

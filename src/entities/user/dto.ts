@@ -8,8 +8,13 @@ export interface UserRegisterDto {
   role: UserRoleDto;
 }
 
+export interface RegisterResponseUserDto {
+  id: number;
+  email: string;
+}
+
 export interface RegisterResponseDto {
-  user: { id: number; email: string };
+  user: RegisterResponseUserDto;
   access_token: string;
   token_type: string;
 }

@@ -805,6 +805,32 @@ describe('application routing and guards', () => {
     expect(navigation.querySelectorAll('[aria-current="page"]')).toHaveLength(0);
   });
 
+  it('keeps an encoded guest login usable as anonymous recovery', async () => {
+    renderApp('/l%6Fgin?returnTo=%2Fcart#recovery');
+
+    await screen.findByRole('heading', { level: 1, name: 'Log in' });
+    expect(screen.getByLabelText('current location').textContent).toBe(
+      '/l%6Fgin?returnTo=%2Fcart#recovery',
+    );
+    expect(document.querySelector('[data-layout]')?.getAttribute('data-layout')).toBe('auth');
+    await waitFor(() =>
+      expect(document.documentElement.getAttribute('data-density')).toBe('marketplace'),
+    );
+  });
+
+  it('keeps an encoded instructor workspace route role-guarded with workspace metadata', async () => {
+    renderApp('/instruct%6Fr/courses?tab=drafts#overview', 'instructor');
+
+    await screen.findByRole('heading', { level: 1, name: 'Instructor courses' });
+    expect(screen.getByLabelText('current location').textContent).toBe(
+      '/instruct%6Fr/courses?tab=drafts#overview',
+    );
+    expect(document.querySelector('[data-layout]')?.getAttribute('data-layout')).toBe('workspace');
+    await waitFor(() =>
+      expect(document.documentElement.getAttribute('data-density')).toBe('workspace'),
+    );
+  });
+
   it('shows instructor navigation without student links', async () => {
     renderApp('/instructor/courses', 'instructor');
     await screen.findByRole('heading', { level: 1, name: 'Instructor courses' });
@@ -1210,6 +1236,41 @@ describe('application routing and guards', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Forgot password' })).toBeTruthy();
     await waitFor(() => expect(document.title).toBe('Forgot password | LearnHub'));
     expect(screen.queryByRole('heading', { name: 'Session check failed' })).toBeNull();
+    expect(tokenStore.get()).toBe('retained-token');
+    expect(document.body.textContent).not.toContain('private upstream hostname');
+  });
+
+  it('keeps encoded login recovery usable after a retained-token bootstrap failure', async () => {
+    const tokenStore = store('retained-token');
+    const client: ApiClient = {
+      request: async () => {
+        throw new Error('private upstream hostname and diagnostic details');
+      },
+    };
+    render(
+      <QueryClientProvider client={createAppQueryClient()}>
+        <ThemeProvider initialDensityMode="marketplace">
+          <SessionProvider client={client} tokenStore={tokenStore}>
+            <MemoryRouter
+              initialEntries={['/l%6Fgin']}
+              future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+            >
+              <ApplicationTitleBoundary>
+                <AppRouter />
+              </ApplicationTitleBoundary>
+            </MemoryRouter>
+          </SessionProvider>
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Log in' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Session check failed' })).toBeNull();
+    expect(document.querySelector('[data-layout]')?.getAttribute('data-layout')).toBe('auth');
+    await waitFor(() =>
+      expect(document.documentElement.getAttribute('data-density')).toBe('marketplace'),
+    );
+    await waitFor(() => expect(document.title).toBe('Log in | LearnHub'));
     expect(tokenStore.get()).toBe('retained-token');
     expect(document.body.textContent).not.toContain('private upstream hostname');
   });
