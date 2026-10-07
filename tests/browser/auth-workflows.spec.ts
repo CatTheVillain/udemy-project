@@ -1233,15 +1233,12 @@ test('login rejects an external returnTo and falls back to the role home', async
 });
 
 test('login ignores an Instructor returnTo for a student account', async ({ page }) => {
-  allowRequestFailures(
-    page,
-    { method: 'GET', path: '/cart', errorText: 'net::ERR_ABORTED' },
-    {
-      method: 'GET',
-      path: AUTH_MY_LEARNING_COLLECTION_PATH,
-      errorText: 'net::ERR_ABORTED',
-    },
-  );
+  allowRequestFailures(page, { method: 'GET', path: '/cart', errorText: 'net::ERR_ABORTED' });
+  allowOptionalRequestFailure(page, {
+    method: 'GET',
+    path: AUTH_MY_LEARNING_COLLECTION_PATH,
+    errorText: 'net::ERR_ABORTED',
+  });
   await page.route('**/me', (route) => fulfillJson(route, 200, profile));
   await page.route('**/login', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
