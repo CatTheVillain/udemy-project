@@ -7,6 +7,9 @@ const successfulPaymentNoticeLifetimeMs = 8_000;
 export function useCheckoutSuccessNoticeDismissal(checkout: CartCompositeCheckoutWorkflow): void {
   const successfulCourseIdsRef = useRef<readonly number[]>([]);
   const dismissSuccessfulCoursesRef = useRef(checkout.dismissSuccessfulCourses);
+  const pendingExitDismissalTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(
+    null,
+  );
   const successfulCourseIds = checkout.results
     .filter((result) => result.kind === 'active')
     .map((result) => result.courseId);
@@ -29,11 +32,22 @@ export function useCheckoutSuccessNoticeDismissal(checkout: CartCompositeCheckou
     return () => globalThis.clearTimeout(timeoutId);
   }, [checkout.phase, checkout.results]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const pendingExitDismissalTimeout = pendingExitDismissalTimeoutRef.current;
+    if (pendingExitDismissalTimeout !== null) {
+      globalThis.clearTimeout(pendingExitDismissalTimeout);
+      pendingExitDismissalTimeoutRef.current = null;
+    }
+
+    return () => {
       const courseIds = successfulCourseIdsRef.current;
-      if (courseIds.length > 0) dismissSuccessfulCoursesRef.current(courseIds);
-    },
-    [],
-  );
+      if (courseIds.length === 0) return;
+      const timeoutId = globalThis.setTimeout(() => {
+        if (pendingExitDismissalTimeoutRef.current !== timeoutId) return;
+        pendingExitDismissalTimeoutRef.current = null;
+        dismissSuccessfulCoursesRef.current(courseIds);
+      }, 0);
+      pendingExitDismissalTimeoutRef.current = timeoutId;
+    };
+  }, []);
 }

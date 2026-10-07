@@ -382,6 +382,78 @@ test('clears successful payment confirmation when Cart unmounts', async ({ page 
   expect(fixture.count('/payments/complete', 'POST')).toBe(1);
 });
 
+test('keeps a completion that finishes away from Cart visible for its full lifetime after return', async ({
+  page,
+}) => {
+  const fixture = new CartCompositeFixture({ cartCourseIds: [7] });
+  const httpFailures = createHttpFailureAccounting();
+  const requestFailures = createRequestFailureAccounting();
+  const consoleErrors: ConsoleErrorEvidence[] = [];
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
+  page.on('requestfailed', (request) =>
+    requestFailures.observe(request.method(), request.url(), request.failure()?.errorText ?? ''),
+  );
+  page.on('response', (response) =>
+    httpFailures.observe(response.request().method(), response.url(), response.status()),
+  );
+  page.on('console', (message) => {
+    if (message.type() === 'error')
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+  });
+  let releaseCompletion!: () => void;
+  const completionHeld = new Promise<void>((resolve) => {
+    releaseCompletion = resolve;
+  });
+  let heldCompletionRequests = 0;
+
+  await openCart(page, fixture);
+  await page.clock.install();
+  await page.clock.pauseAt(new Date('2030-01-01T00:00:00Z'));
+  await page.route('**/payments/complete', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    heldCompletionRequests += 1;
+    if (heldCompletionRequests !== 1)
+      throw new Error('Expected exactly one held payment completion.');
+    await completionHeld;
+    await route.fallback();
+  });
+
+  await page.getByRole('button', { name: 'Complete mock payment', exact: true }).click();
+  await expect.poll(() => heldCompletionRequests).toBe(1);
+  await page.getByRole('link', { name: 'My learning', exact: true }).click();
+  await expect(page).toHaveURL('/learning');
+
+  releaseCompletion();
+  await expect.poll(() => fixture.count('/payments/complete', 'POST')).toBe(1);
+  expect(fixture.count('/cart/checkout', 'POST')).toBe(1);
+
+  await page.getByRole('link', { name: /^Cart/ }).click();
+  await expect(page).toHaveURL('/cart');
+  await expect(page.getByText('Payment completed', { exact: true })).toBeVisible();
+  await page.clock.fastForward(7_999);
+  await expect(page.getByText('Payment completed', { exact: true })).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(page.getByText('Payment completed', { exact: true })).toHaveCount(0);
+
+  expect(pageErrors).toEqual([]);
+  expect(httpFailures.violations()).toEqual({
+    errorResponses: [],
+    unconsumedExpectedResponses: [],
+  });
+  expect(requestFailures.violations()).toEqual({
+    requestFailures: [],
+    unconsumedExpectedRequestFailures: [],
+  });
+  expect(
+    findUnexpectedConsoleErrors(
+      consoleErrors,
+      httpFailures.acceptedFailures(),
+      requestFailures.acceptedFailures(),
+    ),
+  ).toEqual([]);
+});
+
 test('dismisses a deleted failed course and retries the remaining restored course', async ({
   page,
 }) => {

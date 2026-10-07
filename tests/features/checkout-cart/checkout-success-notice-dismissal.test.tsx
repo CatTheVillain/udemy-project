@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, renderHook } from '@testing-library/react';
+import { StrictMode, type PropsWithChildren } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -34,6 +35,10 @@ function checkout(
   };
 }
 
+function StrictModeWrapper({ children }: PropsWithChildren) {
+  return <StrictMode>{children}</StrictMode>;
+}
+
 describe('checkout success notice dismissal', () => {
   it('waits for checkout completion before starting an eight-second success-notice lifetime', async () => {
     vi.useFakeTimers();
@@ -58,5 +63,47 @@ describe('checkout success notice dismissal', () => {
     });
     expect(dismissSuccessfulCourses).toHaveBeenCalledOnce();
     expect(dismissSuccessfulCourses).toHaveBeenCalledWith([7]);
+  });
+
+  it('keeps an already-completed checkout notice visible for its full lifetime in StrictMode', async () => {
+    vi.useFakeTimers();
+    const dismissSuccessfulCourses = vi.fn();
+    const value = checkout('checkout_completed', false, dismissSuccessfulCourses);
+
+    renderHook(() => useCheckoutSuccessNoticeDismissal(value), { wrapper: StrictModeWrapper });
+
+    expect(dismissSuccessfulCourses).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7_999);
+    });
+    expect(dismissSuccessfulCourses).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(dismissSuccessfulCourses).toHaveBeenCalledOnce();
+    expect(dismissSuccessfulCourses).toHaveBeenCalledWith([7]);
+  });
+
+  it('dismisses an already-completed checkout notice after a real StrictMode unmount without leaving its lifetime timer active', async () => {
+    vi.useFakeTimers();
+    const dismissSuccessfulCourses = vi.fn();
+    const value = checkout('checkout_completed', false, dismissSuccessfulCourses);
+    const view = renderHook(() => useCheckoutSuccessNoticeDismissal(value), {
+      wrapper: StrictModeWrapper,
+    });
+
+    expect(dismissSuccessfulCourses).not.toHaveBeenCalled();
+    view.unmount();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(dismissSuccessfulCourses).toHaveBeenCalledOnce();
+    expect(dismissSuccessfulCourses).toHaveBeenCalledWith([7]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8_000);
+    });
+    expect(dismissSuccessfulCourses).toHaveBeenCalledOnce();
   });
 });
