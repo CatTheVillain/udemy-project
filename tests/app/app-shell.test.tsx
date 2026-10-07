@@ -1434,7 +1434,17 @@ describe('AppShell student cart query and presentation', () => {
     renderShell(authenticatedClient('student'), 'student-token', '/courses/7');
 
     expect(await screen.findByRole('search', { name: 'Course catalog search' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Catalog' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Catalog' }).getAttribute('aria-current')).toBe(
+      'location',
+    );
+  });
+
+  it('keeps Catalog as the page-current root navigation item', async () => {
+    renderShell(authenticatedClient('student'), 'student-token', '/');
+
+    expect(
+      (await screen.findByRole('link', { name: 'Catalog' })).getAttribute('aria-current'),
+    ).toBe('page');
   });
 
   it('uses the enrollment-aware assistant destination from student mobile navigation', async () => {

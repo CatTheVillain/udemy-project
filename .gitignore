@@ -4,6 +4,7 @@
 
 # Dependencies
 node_modules/
+.quality-stage0-*
 
 # Build output
 dist/

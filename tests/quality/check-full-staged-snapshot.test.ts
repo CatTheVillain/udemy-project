@@ -244,6 +244,30 @@ describe.sequential('authenticated full staged snapshot', () => {
     expect(result.stdout).toContain('QUALITY_FULL_CHECK_PASS');
     await protectedState(value);
   }, 90_000);
+  it('keeps interrupted stage artifacts out of ordinary public staging while retaining the authenticated snapshot path', async () => {
+    const value = await fixture();
+    await mkdir(resolve(value.repository, '.quality-stage0-snapshot'));
+    await Promise.all([
+      writeFile(resolve(value.repository, '.quality-stage0-snapshot', 'stage.tar'), 'abandoned'),
+      writeFile(resolve(value.repository, '.quality-stage0-private-index'), 'abandoned'),
+      writeFile(resolve(value.repository, '.quality-stage0-prettier-cache'), 'abandoned'),
+    ]);
+
+    git(value.repository, ['add', '-A']);
+    expect(
+      git(value.repository, ['diff', '--cached', '--name-only']).stdout.toString(),
+    ).not.toMatch(/(^|\n)\.quality-stage0-/);
+    const afterOrdinaryStage = stage(value.repository);
+    expect(afterOrdinaryStage.base).toBe(value.current.base);
+    expect(afterOrdinaryStage.tree).toBe(value.current.tree);
+    expect(afterOrdinaryStage.digest).toBe(value.current.digest);
+    await refresh(value);
+
+    const result = checker(value);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('QUALITY_FULL_CHECK_PASS');
+    await protectedState(value);
+  }, 90_000);
   it.each([
     [
       'altered bytes',

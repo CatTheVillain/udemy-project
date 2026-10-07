@@ -152,9 +152,8 @@ export function analyseSourceText(file, content, sourceRoot = root) {
       const owner = nodeSymbol(node);
       if (
         projection &&
-        owner &&
         !ts.findAncestor(node, ts.isInterfaceDeclaration) &&
-        !isExactAdapter(normalizedFile, owner, projection, sourceFile)
+        !(owner && isExactAdapter(normalizedFile, owner, projection, sourceFile))
       ) {
         findings.push(
           finding(

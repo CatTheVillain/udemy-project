@@ -811,6 +811,19 @@ describe('CRF-001 localization transactions', () => {
     const request = await fe072AdditionRequest(sourceFixture);
     const before = await readPair(targets);
     const beforeCorpus = JSON.parse(before[0]);
+    const existingFamily = structuredClone(request);
+    existingFamily.additions[0].familyId = 'instructor-editor-messages';
+    await expect(reconcileFromRecordedBase(targets, sourceFixture, existingFamily)).rejects.toThrow(
+      /addition family already exists: instructor-editor-messages/,
+    );
+    expect(await readPair(targets)).toEqual(before);
+    const absentUnit = structuredClone(request);
+    absentUnit.additions[0].familyId = 'another-upload-family';
+    absentUnit.additions[0].unitIds = ['MLUX-C9999'];
+    await expect(reconcileFromRecordedBase(targets, sourceFixture, absentUnit)).rejects.toThrow(
+      /addition unit is absent or inactive: MLUX-C9999/,
+    );
+    expect(await readPair(targets)).toEqual(before);
     const preservedUnit = structuredClone(
       beforeCorpus.units.find((unit: { id: string }) => unit.id === 'MLUX-C0001'),
     );
@@ -945,20 +958,6 @@ describe('CRF-001 localization transactions', () => {
     stale.sources[0].expectedSourceFingerprint = `sha256:${'0'.repeat(64)}`;
     await expect(reconcileFromRecordedBase(targets, sourceFixture, stale)).rejects.toThrow(
       /stale (?:current|expected) source fingerprint/,
-    );
-    expect(await readPair(targets)).toEqual(committed);
-
-    const existingFamily = structuredClone(request);
-    existingFamily.taskId = 'CRF-072';
-    existingFamily.additions[0].familyId = 'lesson-upload-descriptions';
-    await expect(reconcileFromRecordedBase(targets, sourceFixture, existingFamily)).rejects.toThrow(
-      /stale expected source fingerprint/,
-    );
-    const absentUnit = structuredClone(request);
-    absentUnit.additions[0].familyId = 'another-upload-family';
-    absentUnit.additions[0].unitIds = ['MLUX-C9999'];
-    await expect(reconcileFromRecordedBase(targets, sourceFixture, absentUnit)).rejects.toThrow(
-      /stale expected source fingerprint/,
     );
     expect(await readPair(targets)).toEqual(committed);
 

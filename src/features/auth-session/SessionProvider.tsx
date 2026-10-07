@@ -325,30 +325,72 @@ export function SessionProvider({
     async <TResponse, TBody = unknown>(
       options: ApiRequestOptions<TBody, NoInfer<TResponse>>,
     ): Promise<TResponse> => {
-      const generation = generationRef.current;
-      const token = tokenStore.get();
-      try {
-        const response = await client.request<TResponse, TBody>(
-          forSessionGeneration({ ...options, authPolicy: 'optional' }, generation),
-        );
-        if (!isCurrentSnapshot(generation, token)) {
+      let generation = generationRef.current;
+      let token = tokenStore.get();
+      let recoveredReplacement = false;
+      const staleSessionError = () =>
+        new ApiError({
+          kind: 'aborted',
+          status: null,
+          message: 'Request belongs to a replaced session',
+        });
+      const canRecoverReplacement = () => {
+        if (
+          generationRef.current === generation &&
+          tokenStore.get() !== token &&
+          mountedRef.current
+        ) {
           reconcileReplacedToken(generation, token);
-          throw new ApiError({
-            kind: 'aborted',
-            status: null,
-            message: 'Request belongs to a replaced session',
-          });
         }
-        return response;
-      } catch (error) {
-        if (!(error instanceof ApiError) || error.status !== 401 || !token) {
-          throw error;
-        }
-        if (!clearSessionForSnapshot(generation, token)) throw error;
-        return client.request<TResponse, TBody>(
-          forSessionGeneration({ ...options, authPolicy: 'public' }, generationRef.current),
+        return (
+          !recoveredReplacement &&
+          (options.method ?? 'GET') === 'GET' &&
+          !options.signal?.aborted &&
+          mountedRef.current &&
+          generationRef.current !== generation
         );
+      };
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await client.request<TResponse, TBody>(
+            forSessionGeneration({ ...options, authPolicy: 'optional' }, generation),
+          );
+          if (isCurrentSnapshot(generation, token)) return response;
+          if (!canRecoverReplacement()) break;
+        } catch (error) {
+          if (error instanceof ApiError && error.kind === 'aborted' && canRecoverReplacement()) {
+            recoveredReplacement = true;
+            generation = generationRef.current;
+            token = tokenStore.get();
+            continue;
+          }
+          if (
+            error instanceof ApiError &&
+            error.kind === 'aborted' &&
+            !options.signal?.aborted &&
+            mountedRef.current &&
+            generationRef.current !== generation
+          )
+            break;
+          if (
+            recoveredReplacement ||
+            !(error instanceof ApiError) ||
+            error.status !== 401 ||
+            !token
+          )
+            throw error;
+          if (!clearSessionForSnapshot(generation, token)) throw error;
+          return client.request<TResponse, TBody>(
+            forSessionGeneration({ ...options, authPolicy: 'public' }, generationRef.current),
+          );
+        }
+
+        recoveredReplacement = true;
+        generation = generationRef.current;
+        token = tokenStore.get();
       }
+      throw staleSessionError();
     },
     [clearSessionForSnapshot, client, isCurrentSnapshot, reconcileReplacedToken, tokenStore],
   );

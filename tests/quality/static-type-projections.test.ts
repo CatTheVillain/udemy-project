@@ -33,6 +33,15 @@ describe('indexed type projections in static quality analysis', () => {
       'state generic annotations',
       "declare function useState<T>(initial: T): readonly [T];\ninterface Course { id: string }\nconst [courseId] = useState<Course['id']>('course');",
     ],
+    [
+      'object binding annotations',
+      "interface Course { id: string }\nconst { id }: { id: Course['id'] } = { id: 'course' };",
+    ],
+    ['expression statements', "interface Course { id: string }\n(<Course['id']>'course');"],
+    [
+      'export default expressions',
+      "interface Course { id: string }\nexport default (<Course['id']>'course');",
+    ],
   ])('reports a literal indexed access in %s', (_caseName, source) => {
     expect(ruleIds(source)).toEqual(['TS-TYPE-002']);
   });
@@ -81,6 +90,14 @@ describe('indexed type projections in static quality analysis', () => {
     expect(
       ruleIds(
         "// quality-exception: TS-TYPE-002 VisiblePayload namespace-leading marker must not suppress a descendant alias.\ndeclare namespace Contracts {\n  interface ApiEnvelope<T> { data: T }\n  type VisiblePayload<T> = ApiEnvelope<T>['data'];\n}",
+      ),
+    ).toEqual(['TS-TYPE-002']);
+  });
+
+  it('does not let an ownerless projection inherit a nearby exception', () => {
+    expect(
+      ruleIds(
+        "interface Course { id: string }\n// quality-exception: TS-TYPE-002 Course stale ownerless exception.\nexport default (<Course['id']>'course');",
       ),
     ).toEqual(['TS-TYPE-002']);
   });

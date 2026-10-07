@@ -466,12 +466,21 @@ describe('session-scoped private query cleanup', () => {
   });
 });
 
-function RequestHarness({ mode }: { mode: 'required' | 'optional' }) {
+function RequestHarness({
+  mode,
+  requestOptions = {},
+}: {
+  mode: 'required' | 'optional';
+  requestOptions?: Pick<ApiRequestOptions, 'method' | 'signal'>;
+}) {
   const { acceptAccessToken, requestOptional, requestRequired, state } = useSession();
   const [result, setResult] = useState('idle');
   return (
     <div>
       <output aria-label="session status">{state.status}</output>
+      <output aria-label="session role">
+        {state.status === 'authenticated' ? state.user.role : 'none'}
+      </output>
       <output aria-label="request result">{result}</output>
       <button type="button" onClick={() => acceptAccessToken('newer-token')}>
         Accept newer token
@@ -485,10 +494,12 @@ function RequestHarness({ mode }: { mode: 'required' | 'optional' }) {
                 ? await requestOptional<{ ok: boolean }>({
                     path: '/courses',
                     dedupeKey: 'public-courses',
+                    ...requestOptions,
                   })
                 : await requestRequired<{ ok: boolean }>({
                     path: '/cart',
                     dedupeKey: 'current-cart',
+                    ...requestOptions,
                   });
             setResult(response.ok ? 'success' : 'unexpected');
           } catch {
@@ -611,6 +622,191 @@ async function verifyGenerationScopedRealClientOverlap(
 }
 
 describe('session-aware requests', () => {
+  it.each([
+    {
+      name: 'a completed stale response',
+      settle: (pending: ReturnType<typeof deferred<unknown>>) => pending.resolve({ ok: true }),
+    },
+    {
+      name: 'the client stale-session error',
+      settle: (pending: ReturnType<typeof deferred<unknown>>) =>
+        pending.reject(
+          new ApiError({
+            kind: 'aborted',
+            status: null,
+            message: 'Request belongs to a replaced session',
+          }),
+        ),
+    },
+  ])('retries an optional public read once after $name', async ({ settle }) => {
+    const store = tokenStore('older-token');
+    const staleRequest = deferred<unknown>();
+    let optionalRequests = 0;
+    let bootstrapRequests = 0;
+    const request = vi.fn((options: ApiRequestOptions) => {
+      if (options.path === '/me') {
+        bootstrapRequests += 1;
+        return Promise.resolve({
+          ...profile,
+          role: bootstrapRequests === 1 ? 'student' : 'instructor',
+        });
+      }
+      optionalRequests += 1;
+      return optionalRequests === 1 ? staleRequest.promise : Promise.resolve({ ok: true });
+    });
+    render(
+      <SessionProvider client={clientFrom(request)} tokenStore={store}>
+        <RequestHarness mode="optional" />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    expect(screen.getByLabelText('session role').textContent).toBe('student');
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() => expect(optionalRequests).toBe(1));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await waitFor(() =>
+      expect(screen.getByLabelText('session role').textContent).toBe('instructor'),
+    );
+    expect(bootstrapRequests).toBe(2);
+
+    await act(async () => settle(staleRequest));
+    await waitFor(() =>
+      expect(screen.getByLabelText('request result').textContent).toBe('success'),
+    );
+    expect(optionalRequests).toBe(2);
+    expect(store.value).toBe('newer-token');
+  });
+
+  it('does not retry an optional request aborted by its caller after session replacement', async () => {
+    const controller = new AbortController();
+    const pending = deferred<unknown>();
+    const request = vi.fn((options: ApiRequestOptions) => {
+      if (options.path === '/me') return Promise.resolve(profile);
+      return pending.promise;
+    });
+    render(
+      <SessionProvider client={clientFrom(request)} tokenStore={tokenStore('current-token')}>
+        <RequestHarness mode="optional" requestOptions={{ signal: controller.signal }} />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() =>
+      expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1),
+    );
+    expect(request.mock.calls.find(([options]) => options.path === '/courses')?.[0].signal).toBe(
+      controller.signal,
+    );
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    controller.abort();
+    await act(async () =>
+      pending.reject(
+        new ApiError({ kind: 'aborted', status: null, message: 'Request was cancelled' }),
+      ),
+    );
+    await waitFor(() => expect(screen.getByLabelText('request result').textContent).toBe('failed'));
+    expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1);
+  });
+
+  it('does not retry an optional request after its provider unmounts', async () => {
+    const pending = deferred<unknown>();
+    const request = vi.fn((options: ApiRequestOptions) =>
+      options.path === '/me' ? Promise.resolve(profile) : pending.promise,
+    );
+    const view = render(
+      <SessionProvider client={clientFrom(request)} tokenStore={tokenStore('current-token')}>
+        <RequestHarness mode="optional" />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    await act(async () =>
+      userEvent.setup().click(screen.getByRole('button', { name: 'Run request' })),
+    );
+    await waitFor(() =>
+      expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1),
+    );
+    view.unmount();
+    await act(async () => pending.resolve({ ok: true }));
+    expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1);
+  });
+
+  it('does not retry an optional mutation after session replacement', async () => {
+    const pending = deferred<unknown>();
+    const request = vi.fn((options: ApiRequestOptions) =>
+      options.path === '/me' ? Promise.resolve(profile) : pending.promise,
+    );
+    render(
+      <SessionProvider client={clientFrom(request)} tokenStore={tokenStore('current-token')}>
+        <RequestHarness mode="optional" requestOptions={{ method: 'POST' }} />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() =>
+      expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1),
+    );
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await act(async () => pending.resolve({ ok: true }));
+    await waitFor(() => expect(screen.getByLabelText('request result').textContent).toBe('failed'));
+    expect(request.mock.calls.filter(([options]) => options.path === '/courses')).toHaveLength(1);
+  });
+
+  it('does not issue a third optional request when recovery is superseded by the same token again', async () => {
+    const store = tokenStore('older-token');
+    const staleRequest = deferred<unknown>();
+    const recoveryRequest = deferred<unknown>();
+    let optionalRequests = 0;
+    let bootstrapRequests = 0;
+    const request = vi.fn((options: ApiRequestOptions) => {
+      if (options.path === '/me') {
+        bootstrapRequests += 1;
+        return Promise.resolve({
+          ...profile,
+          role: bootstrapRequests === 1 ? 'student' : 'instructor',
+        });
+      }
+      optionalRequests += 1;
+      if (optionalRequests === 1) return staleRequest.promise;
+      if (optionalRequests === 2) return recoveryRequest.promise;
+      throw new Error('Unexpected third optional request');
+    });
+    render(
+      <SessionProvider client={clientFrom(request)} tokenStore={store}>
+        <RequestHarness mode="optional" />
+      </SessionProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() => expect(optionalRequests).toBe(1));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await act(async () => staleRequest.resolve({ ok: true }));
+    await waitFor(() => expect(optionalRequests).toBe(2));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await act(async () => recoveryRequest.resolve({ ok: true }));
+    await waitFor(() => expect(screen.getByLabelText('request result').textContent).toBe('failed'));
+    expect(optionalRequests).toBe(2);
+    expect(store.value).toBe('newer-token');
+  });
+
   it('isolates same-key real-client work across generations when the older request succeeds', async () => {
     await verifyGenerationScopedRealClientOverlap(
       new Response(JSON.stringify({ source: 'old-session' }), {

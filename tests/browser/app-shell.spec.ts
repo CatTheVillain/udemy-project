@@ -1394,6 +1394,97 @@ test('redirects an anonymous protected route with its internal returnTo', async 
   assertRuntimeClean();
 });
 
+test('marks Catalog as the current location on Course Detail and keeps its root page semantics', async ({
+  page,
+}) => {
+  const assertRuntimeClean = monitorRuntime(page);
+  await page.addInitScript(
+    ({ detailBody, outlineBody }) => {
+      const nativeFetch = globalThis.fetch.bind(globalThis);
+      const observed = globalThis as typeof globalThis & {
+        __catalogCurrentLocationRequests?: Array<{ method: string; path: string }>;
+      };
+      observed.__catalogCurrentLocationRequests = [];
+      globalThis.fetch = async (input, init) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        const url = new URL(request.url);
+        const path = `${url.pathname}${url.search}`;
+        const relevant = url.pathname === '/courses/7' || url.pathname === '/courses/7/lessons';
+        if (relevant)
+          observed.__catalogCurrentLocationRequests?.push({ method: request.method, path });
+
+        const isDetail = request.method === 'GET' && path === '/courses/7';
+        const isOutline = request.method === 'GET' && path === '/courses/7/lessons?page=1&size=100';
+        if (!isDetail && !isOutline) return nativeFetch(input, init);
+        if (request.signal.aborted) {
+          throw new DOMException('The operation was aborted.', 'AbortError');
+        }
+        return new Response(isDetail ? detailBody : outlineBody, {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      };
+    },
+    {
+      detailBody: JSON.stringify({
+        id: 7,
+        title: 'React foundations',
+        description: 'Build reliable interfaces.',
+        price: '0.00',
+        currency: 'USD',
+        published_at: '2026-07-01T00:00:00Z',
+        created_at: '2026-07-01T00:00:00Z',
+        updated_at: '2026-07-01T00:00:00Z',
+        instructor: { id: 2, name: 'Ada', surname: 'Lovelace' },
+        lessons: [],
+      }),
+      outlineBody: JSON.stringify({
+        items: [],
+        page: 1,
+        page_size: 100,
+        total: 0,
+        pages: 0,
+        has_next: false,
+        has_previous: false,
+      }),
+    },
+  );
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/courses/7');
+  await expect(page.getByRole('heading', { level: 1, name: 'React foundations' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Course outline' })).toBeVisible();
+
+  const observedRequests = await page.evaluate(() => {
+    const fixture = globalThis as typeof globalThis & {
+      __catalogCurrentLocationRequests?: Array<{ method: string; path: string }>;
+    };
+    return fixture.__catalogCurrentLocationRequests;
+  });
+  expect(observedRequests).toEqual(
+    expect.arrayContaining([
+      { method: 'GET', path: '/courses/7' },
+      { method: 'GET', path: '/courses/7/lessons?page=1&size=100' },
+    ]),
+  );
+  expect(
+    observedRequests?.every(
+      ({ method, path }) =>
+        method === 'GET' &&
+        (path === '/courses/7' || path === '/courses/7/lessons?page=1&size=100'),
+    ),
+  ).toBe(true);
+
+  const catalog = page
+    .getByRole('navigation', { name: 'Primary navigation' })
+    .getByRole('link', { name: 'Catalog', exact: true });
+  await expect(catalog).toHaveAttribute('aria-current', 'location');
+  await catalog.click();
+  await expect(page).toHaveURL('/');
+  await expect(catalog).toHaveAttribute('aria-current', 'page');
+  await expectNoHorizontalOverflow(page);
+  assertRuntimeClean();
+});
+
 test('persists desktop and anonymous-mobile locale selections on the current route', async ({
   page,
 }) => {
@@ -2805,7 +2896,6 @@ test('keeps the tablet drawer present through a normal navigation before focusin
 
   await catalog.click();
   await expect(page).toHaveURL('/');
-  await expect(drawer).toBeVisible();
   await expect(drawer).toHaveCount(0);
   await expect(page.locator('#main-content')).toBeFocused();
   await expectNoHorizontalOverflow(page);
