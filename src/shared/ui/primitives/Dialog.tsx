@@ -33,6 +33,11 @@ interface DialogLayerSnapshot {
   ariaHidden: string | null;
 }
 
+interface DialogUnregisterResult {
+  readonly wasTopmost: boolean;
+  readonly nextTopmost?: DialogOwner;
+}
+
 const dialogOwners: DialogOwner[] = [];
 let bodyOverflowBeforeDialogs: string | undefined;
 const inertSnapshots = new Map<HTMLElement, InertSnapshot>();
@@ -168,7 +173,7 @@ function isTopmostDialog(id: symbol): boolean {
   return dialogOwners[dialogOwners.length - 1]?.id === id;
 }
 
-function unregisterDialog(id: symbol): { wasTopmost: boolean; nextTopmost?: DialogOwner } {
+function unregisterDialog(id: symbol): DialogUnregisterResult {
   const ownerIndex = dialogOwners.findIndex((owner) => owner.id === id);
   const wasTopmost = ownerIndex >= 0 && ownerIndex === dialogOwners.length - 1;
 
@@ -280,6 +285,7 @@ export function Dialog({
     if (!isTopmostDialog(ownerIdRef.current)) return;
 
     if (event.key === 'Escape') {
+      if (event.defaultPrevented) return;
       event.preventDefault();
       event.stopPropagation();
       if (!busy) onClose();

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   addCourseToCart,
   enrollFree,
+  requestCourseDetail,
   requestEnrollments,
   requestLessonOutline,
 } from '../../../src/features/course-detail/api';
@@ -50,12 +51,13 @@ function enrollmentPage(
   };
 }
 
-function lesson(id: number) {
+function lesson(id: number, subtitleStatus?: boolean) {
   return {
     id,
     title: `Lesson ${id}`,
     lesson_type: 'video',
     download_url: `/media/lessons/${id}.mp4`,
+    subtitle_status: subtitleStatus,
     description: null,
     is_published: true,
     created_at: '2026-07-01T00:00:00Z',
@@ -123,6 +125,50 @@ function transportRequester(payloads: readonly unknown[]): SessionContextValue['
 }
 
 describe('course-detail API trust boundaries', () => {
+  it('normalizes a malformed API-010 course response through the real client boundary', async () => {
+    const fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ...course, id: '7' }), { status: 200 }),
+    );
+    const client = createApiClient({ baseUrl: 'https://api.example.test', fetch });
+    const error = await requestCourseDetail(
+      sessionWithRequester((options) => client.request(options)),
+      7,
+      new AbortController().signal,
+    ).catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ kind: 'invalid_response', status: 200 });
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.example.test/courses/7',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('keeps the lesson outline transport contract and course-owned subtitle locator', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify(lessonPage(1, [{ ...lesson(8), subtitle_status: true }], 1, 1)),
+          {
+            status: 200,
+          },
+        ),
+    );
+    const client = createApiClient({ baseUrl: 'https://api.example.test', fetch });
+
+    const outline = await requestLessonOutline(
+      sessionWithRequester((options) => client.request(options)),
+      7,
+      new AbortController().signal,
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.example.test/courses/7/lessons?page=1&size=100',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(outline.items[0]?.subtitleLocator).toEqual({ courseId: 7, lessonId: 8 });
+  });
+
   it.each([
     ['API-020', enrollFree, enrollment(4, 7)],
     [

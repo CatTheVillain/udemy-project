@@ -2,7 +2,10 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { ApiError } from '../../../src/shared/api';
 import {
+  getInstructorLessonUploadRule,
+  isInstructorLessonUploadFileAccepted,
   mapInstructorEditorFormFailure,
+  parseInstructorEditorId,
   type InstructorEditorErrorCopy,
   type InstructorEditorFailureMessage,
   type InstructorEditorFieldDefinition,
@@ -169,5 +172,47 @@ describe('mapInstructorEditorFormFailure', () => {
     expectDescriptorOnly(failure);
     expect(JSON.stringify(failure)).not.toContain('PRIVATE_NULL_400_DETAIL');
     expect(JSON.stringify(failure)).not.toContain('We could not');
+  });
+});
+
+describe('instructor lesson upload validation', () => {
+  it('owns video and PDF extension, case, and inclusive-size boundaries', () => {
+    const file = (name: string, size: number) => ({ name, size }) as File;
+    expect(getInstructorLessonUploadRule('video')).toMatchObject({
+      accept: '.mp4,.webm,.mov',
+      maxBytes: 150 * 1024 * 1024,
+    });
+    expect(getInstructorLessonUploadRule('pdf')).toMatchObject({
+      accept: '.pdf',
+      maxBytes: 50 * 1024 * 1024,
+    });
+    expect(getInstructorLessonUploadRule('text')).toBeNull();
+    const videoLimit = 150 * 1024 * 1024;
+    const pdfLimit = 50 * 1024 * 1024;
+    expect(isInstructorLessonUploadFileAccepted(file('VIDEO.MP4', videoLimit), 'video')).toBe(true);
+    expect(isInstructorLessonUploadFileAccepted(file('movie.webm', videoLimit), 'video')).toBe(
+      true,
+    );
+    expect(isInstructorLessonUploadFileAccepted(file('clip.mov', videoLimit), 'video')).toBe(true);
+    expect(isInstructorLessonUploadFileAccepted(file('video.mp4', videoLimit + 1), 'video')).toBe(
+      false,
+    );
+    expect(isInstructorLessonUploadFileAccepted(file('notes.PDF', pdfLimit), 'pdf')).toBe(true);
+    expect(isInstructorLessonUploadFileAccepted(file('notes.pdf', pdfLimit + 1), 'pdf')).toBe(
+      false,
+    );
+    expect(isInstructorLessonUploadFileAccepted(file('notes', 1), 'pdf')).toBe(false);
+    expect(isInstructorLessonUploadFileAccepted(file('notes.exe', 1), 'pdf')).toBe(false);
+    expect(isInstructorLessonUploadFileAccepted(file('notes.pdf', 1), 'video')).toBe(false);
+    expect(isInstructorLessonUploadFileAccepted(file('notes.txt', 1), 'text')).toBe(false);
+  });
+
+  it('preserves instructor editor route-id parsing semantics', () => {
+    expect(parseInstructorEditorId(undefined)).toBeNull();
+    expect(parseInstructorEditorId('')).toBeNull();
+    expect(parseInstructorEditorId('0')).toBeNull();
+    expect(parseInstructorEditorId('007')).toBe(7);
+    expect(parseInstructorEditorId('9007199254740992')).toBeNull();
+    expect(parseInstructorEditorId('7x')).toBeNull();
   });
 });

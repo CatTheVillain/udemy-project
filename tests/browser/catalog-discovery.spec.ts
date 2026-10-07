@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { ReviewDto } from '@entities/review';
 import {
   createCatalogResponse,
@@ -23,6 +23,55 @@ import {
 const response = createCatalogResponse;
 const permittedCourse = createPermittedCatalogCourse;
 const monitor = installCatalogBrowserMonitor;
+
+async function waitForCatalogHeroBackground(page: Page) {
+  const hero = page.locator('[data-part="catalog-hero"]');
+  await expect(hero).toHaveCount(1);
+  await hero.evaluate(async (element) => {
+    if (!(element instanceof HTMLElement)) throw new Error('Catalog hero is unavailable');
+    const assetUrls = Array.from(
+      getComputedStyle(element, '::before').backgroundImage.matchAll(/url\((['"]?)(.*?)\1\)/g),
+      (match) => {
+        const assetUrl = match[2];
+        if (!assetUrl) throw new Error('Catalog hero background URL is unavailable');
+        const resolvedUrl = new URL(assetUrl, window.location.href);
+        if (resolvedUrl.origin !== window.location.origin)
+          throw new Error(`Catalog hero background has a non-local origin: ${resolvedUrl.origin}`);
+        return resolvedUrl;
+      },
+    );
+    if (assetUrls.length !== 1)
+      throw new Error(`Expected one Catalog hero background asset, received ${assetUrls.length}`);
+    const [assetUrl] = assetUrls;
+    if (
+      ![
+        '/src/pages/catalog-page/assets/catalog-hero-ui025.png',
+        '/src/pages/catalog-page/assets/catalog-hero-mobile-stars-lines-uifd001.png',
+      ].includes(assetUrl.pathname)
+    ) {
+      throw new Error(`Unexpected Catalog hero background asset: ${assetUrl.href}`);
+    }
+    const image = new Image();
+    image.src = assetUrl.href;
+    await image.decode();
+    if (image.naturalWidth === 0)
+      throw new Error(`Catalog hero background failed: ${assetUrl.href}`);
+  });
+}
+
+async function gotoCatalogAndWaitForHero(
+  page: Page,
+  url: string,
+  options?: Parameters<Page['goto']>[1],
+) {
+  if (
+    new URL(page.url()).pathname === '/' &&
+    (await page.locator('[data-part="catalog-hero"]').count())
+  )
+    await waitForCatalogHeroBackground(page);
+  await page.goto(url, options);
+  await waitForCatalogHeroBackground(page);
+}
 
 interface CatalogLocaleExpectation {
   readonly locale: 'ru' | 'uz';
@@ -208,16 +257,19 @@ test('opens a published Catalog course through a successful Course Detail respon
 
   const catalogOrigin = '/?search_query=React&min_price=5&max_price=10&sort=-price&page=3#results';
   const waitForPageThreeCatalogResponse = () =>
-    page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        response.request().method() === 'GET' &&
-        url.pathname === '/courses' &&
-        url.search ===
-          '?page=3&page_size=24&search_query=React&min_price=5&max_price=10&sort=-price' &&
-        response.status() === 200
-      );
-    });
+    page.waitForResponse(
+      (response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === 'GET' &&
+          url.pathname === '/courses' &&
+          url.search ===
+            '?page=3&page_size=24&search_query=React&min_price=5&max_price=10&sort=-price' &&
+          response.status() === 200
+        );
+      },
+      { timeout: 15_000 },
+    );
   const courseLink = page.getByRole('link', { name: course.title });
   const pageThreeCancellation: RequestFailureIdentity = {
     method: 'GET',
@@ -1989,7 +2041,7 @@ test('keeps Catalog result geometry stable while changed Sort and price requests
   };
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/?sort=-created_at&page=2');
+  await gotoCatalogAndWaitForHero(page, '/?sort=-created_at&page=2');
   await expect(page.locator('[data-part="course-card"]')).toHaveCount(20);
   const trigger = page.locator('[data-part="catalog-sort-trigger"]');
   const priceTrigger = page.getByRole('button', { name: 'Price' });
@@ -2136,7 +2188,7 @@ test('keeps Catalog result geometry stable while changed Sort and price requests
   }
 
   await page.setViewportSize({ width: 390, height: 740 });
-  await page.goto('/?sort=-created_at');
+  await gotoCatalogAndWaitForHero(page, '/?sort=-created_at');
   await expect(page.locator('[data-part="course-card"]')).toHaveCount(20);
   const mobileRequestsBeforeSelection = requests.length;
   before = await prepareRefresh('mid');
@@ -2225,7 +2277,7 @@ test('keeps anonymous published Catalog links semantic and contained across the 
 
   for (const width of [320, 390, 767, 768, 1024, 1099, 1100, 1279, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/');
+    await gotoCatalogAndWaitForHero(page, '/');
     expect(await page.evaluate(() => window.innerWidth)).toBe(width);
 
     const freeCard = page
@@ -2302,7 +2354,7 @@ test('keeps anonymous published Catalog links semantic and contained across the 
     await page.mouse.up();
     await expect(page).toHaveURL('/login?returnTo=%2Fcourses%2F11');
 
-    await page.goto('/');
+    await gotoCatalogAndWaitForHero(page, '/');
     const freeLinkAfterReset = page.getByRole('link', { name: 'Enroll free' });
     await freeLinkAfterReset.focus();
     await expect(freeLinkAfterReset).toBeFocused();
@@ -2340,7 +2392,7 @@ test('hydrates, applies, traverses catalog history, and keeps real-browser diagn
   });
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/?search_query=React&min_price=5&sort=-id&page=2');
+  await gotoCatalogAndWaitForHero(page, '/?search_query=React&min_price=5&sort=-id&page=2');
   await expect(page).toHaveURL(/search_query=React&min_price=5&sort=-created_at&page=2/);
   const catalogSearch = page.getByRole('search', { name: 'Course catalog search' });
   const headerSearch = catalogSearch.getByLabel('Search courses');
@@ -2976,6 +3028,7 @@ test('hydrates, applies, traverses catalog history, and keeps real-browser diagn
     .toBe(1);
 
   await page.setViewportSize({ width: 320, height: 740 });
+  await waitForCatalogHeroBackground(page);
   expect(
     await page.evaluate(
       () =>
@@ -3213,6 +3266,7 @@ test('remembers catalog searches in an accessible local combobox without changin
 
   for (const width of [320, 768, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
+    if (width === 320) await waitForCatalogHeroBackground(page);
     await input.press('ArrowDown');
     const geometry = await page
       .getByRole('listbox', { name: 'Recent searches' })
@@ -4923,6 +4977,7 @@ test('localizes the Price disclosure trigger and fields without changing respons
     } else {
       await page.goto('/');
     }
+    await waitForCatalogHeroBackground(page);
     await page.evaluate(
       (locale) => localStorage.setItem('learnhub.locale', locale),
       expected.locale,
@@ -4934,6 +4989,7 @@ test('localizes the Price disclosure trigger and fields without changing respons
         await page.reload();
       },
     );
+    await waitForCatalogHeroBackground(page);
 
     const trigger = page.getByRole('button', { name: expected.trigger });
     const chevron = trigger.locator('[data-part="catalog-price-chevron"]');
@@ -5000,6 +5056,7 @@ test('localizes the Price disclosure trigger and fields without changing respons
     await expect(page.locator(`[id="${appliedDescriptionId}"]`)).toHaveText(
       `${expected.minimum}: 5, ${expected.maximum}: 20`,
     );
+    await waitForCatalogHeroBackground(page);
   }
 
   const reducedMotionTrigger = page.getByRole('button', { name: 'Narx' });
@@ -5084,8 +5141,10 @@ test('keeps the localized Catalog Price and Sort group compact until its content
   });
 
   await page.goto('/');
+  await waitForCatalogHeroBackground(page);
   await page.evaluate(() => localStorage.setItem('learnhub.locale', 'ru'));
   await page.reload();
+  await waitForCatalogHeroBackground(page);
 
   const price = page.locator('[data-part="catalog-price-trigger"]');
   const sort = page.locator('[data-part="catalog-sort-trigger"]');
@@ -5120,6 +5179,7 @@ test('keeps the localized Catalog Price and Sort group compact until its content
   const russianGeometryByWidth = new Map<number, CatalogToolbarBreakpointGeometry>();
   for (const width of [320, 388, 390, 470, 480, 528, 560, 561, 600, 617, 639, 640, 760, 768]) {
     await page.setViewportSize({ width, height: 900 });
+    await waitForCatalogHeroBackground(page);
     await expect(heading).toBeVisible();
     await expect(price).toBeVisible();
     await expect(sort).toBeVisible();
@@ -5178,6 +5238,7 @@ test('keeps the localized Catalog Price and Sort group compact until its content
 
   for (const width of [388, 560, 639, 760]) {
     await page.setViewportSize({ width, height: 900 });
+    await waitForCatalogHeroBackground(page);
     await price.click();
     await expect(page.getByRole('group', { name: 'Диапазон цен' })).toBeVisible();
     const geometry = await capture();
@@ -5191,6 +5252,7 @@ test('keeps the localized Catalog Price and Sort group compact until its content
   }
 
   await page.setViewportSize({ width: 639, height: 900 });
+  await waitForCatalogHeroBackground(page);
   await page.mouse.move(0, 0);
   await sort.focus();
   await sort.press('Enter');
@@ -5208,12 +5270,15 @@ test('keeps the localized Catalog Price and Sort group compact until its content
       (nextLocale) => localStorage.setItem('learnhub.locale', nextLocale),
       locale,
     );
+    await waitForCatalogHeroBackground(page);
     await page.reload();
+    await waitForCatalogHeroBackground(page);
     await expect(heading).toBeVisible();
     await expect(price).toBeVisible();
     await expect(sort).toBeVisible();
     for (const width of [320, 388, 390, 470, 480, 528, 560, 561, 600, 617, 639, 640, 760, 768]) {
       await page.setViewportSize({ width, height: 900 });
+      await waitForCatalogHeroBackground(page);
       const geometry = await capture();
       if (width <= 560) {
         expect(geometry.heading.bottom, JSON.stringify(geometry)).toBeLessThanOrEqual(
@@ -5302,6 +5367,7 @@ test('renders the D20 Catalog vertical slice in Russian and Uzbek without changi
     await allowOptionalCatalogRatingFailures(assertClean, async () => {
       await page.goto('/');
     });
+    await waitForCatalogHeroBackground(page);
     await page.evaluate(
       (locale) => localStorage.setItem('learnhub.locale', locale),
       expected.locale,
@@ -5309,6 +5375,7 @@ test('renders the D20 Catalog vertical slice in Russian and Uzbek without changi
     await allowOptionalCatalogRatingFailures(assertClean, async () => {
       await page.reload();
     });
+    await waitForCatalogHeroBackground(page);
 
     const freeCard = page.locator('[data-part="course-card"]').filter({
       has: page.getByRole('heading', { level: 3, name: 'React Fundamentals: Components' }),
@@ -5481,6 +5548,7 @@ test('renders the D20 Catalog vertical slice in Russian and Uzbek without changi
     await page.evaluate(() => {
       document.documentElement.style.zoom = '';
     });
+    await waitForCatalogHeroBackground(page);
   }
 
   expect(mutationRequests).toEqual([]);

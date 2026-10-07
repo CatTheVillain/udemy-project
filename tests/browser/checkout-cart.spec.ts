@@ -1,6 +1,13 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 import { cartWorkflowOrigin } from './cart-workflow-server';
+import {
+  createHttpFailureAccounting,
+  createRequestFailureAccounting,
+  findUnexpectedConsoleErrors,
+  matchesAcceptedRequestConsole,
+  type ConsoleErrorEvidence,
+} from './support/visual-quality';
 
 type PaymentOutcome = 'success' | 'failed';
 type EnrollmentStatus = 'active' | 'cancelled' | 'pending_payment';
@@ -20,6 +27,13 @@ interface RequestRecord {
   readonly body: unknown;
   readonly method: string;
   readonly path: string;
+}
+interface LostCheckoutReceipt {
+  readonly errorText: 'net::ERR_FAILED';
+  readonly method: 'POST';
+  readonly path: '/cart/checkout';
+  readonly query: '';
+  readonly url: string;
 }
 interface CartFixtureOptions {
   readonly cartCourseIds?: readonly number[];
@@ -111,6 +125,7 @@ function isCartCompositeApiPath(path: string): boolean {
 
 class CartCompositeFixture {
   readonly records: RequestRecord[] = [];
+  readonly lostCheckoutReceipts: LostCheckoutReceipt[] = [];
   cartCourseIds: number[];
   readonly checkoutMode: 'lost' | 'normal';
   readonly completionMode: 'lost' | 'malformed' | 'normal';
@@ -119,6 +134,7 @@ class CartCompositeFixture {
   readonly enrollments: FixtureEnrollment[];
   readonly uncertainCompletionEnrollmentId: number | undefined;
   readonly unrelatedCourseIdAfterRestore: number | undefined;
+  private lostCheckoutIntent = false;
 
   constructor(options: CartFixtureOptions = {}) {
     this.cartCourseIds = [...(options.cartCourseIds ?? [7])];
@@ -140,6 +156,10 @@ class CartCompositeFixture {
   }
   bodies(path: string): readonly unknown[] {
     return this.records.filter((record) => record.path === path).map((record) => record.body);
+  }
+  registerLostCheckoutIntent(): void {
+    if (this.lostCheckoutIntent) throw new Error('Lost checkout intent was already registered.');
+    this.lostCheckoutIntent = true;
   }
 
   private record(route: Route): RequestRecord {
@@ -198,7 +218,24 @@ class CartCompositeFixture {
           else this.enrollments.push(enrollment(70 + courseId, courseId, 'pending_payment'));
         }
         this.cartCourseIds = [];
-        if (this.checkoutMode === 'lost') return route.abort('failed');
+        if (this.checkoutMode === 'lost') {
+          const request = route.request();
+          const url = new URL(request.url());
+          if (
+            this.lostCheckoutIntent &&
+            request.method() === 'POST' &&
+            url.pathname === '/cart/checkout' &&
+            url.search === ''
+          )
+            this.lostCheckoutReceipts.push({
+              errorText: 'net::ERR_FAILED',
+              method: 'POST',
+              path: '/cart/checkout',
+              query: '',
+              url: request.url(),
+            });
+          return route.abort('failed');
+        }
         return json(route, { enrolled_courses: 1, message: 'legacy acknowledgement' });
       }
       if (record.path === '/enrollments/my' && record.method === 'GET') {
@@ -451,11 +488,70 @@ test('admits loss only from full truth, locks ambiguity, and preserves a proven 
   page,
 }) => {
   const fixture = new CartCompositeFixture({ checkoutMode: 'lost' });
+  const httpFailures = createHttpFailureAccounting();
+  const requestFailures = createRequestFailureAccounting();
+  const consoleErrors: ConsoleErrorEvidence[] = [];
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
+  page.on('requestfailed', (request) =>
+    requestFailures.observe(request.method(), request.url(), request.failure()?.errorText ?? ''),
+  );
+  page.on('response', (response) =>
+    httpFailures.observe(response.request().method(), response.url(), response.status()),
+  );
+  page.on('console', (message) => {
+    if (message.type() === 'error')
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+  });
   await openCart(page, fixture);
+  fixture.registerLostCheckoutIntent();
+  requestFailures.allow(
+    { errorText: 'net::ERR_FAILED', method: 'POST', path: '/cart/checkout' },
+    1,
+  );
   await page.getByRole('button', { name: 'Complete mock payment', exact: true }).click();
   await expect(page.getByText('Payment completed', { exact: true })).toBeVisible();
+  await expect.poll(() => requestFailures.acceptedFailures().length).toBe(1);
+  await expect.poll(() => consoleErrors.length).toBe(1);
+  const [receipt] = fixture.lostCheckoutReceipts;
+  const [acceptedFailure] = requestFailures.acceptedFailures();
+  expect(fixture.lostCheckoutReceipts).toHaveLength(1);
+  expect(receipt).toEqual({
+    errorText: 'net::ERR_FAILED',
+    method: 'POST',
+    path: '/cart/checkout',
+    query: '',
+    url: acceptedFailure!.url,
+  });
+  expect(matchesAcceptedRequestConsole(consoleErrors[0]!, acceptedFailure!)).toBe(true);
   expect(fixture.count('/cart/checkout', 'POST')).toBe(1);
   expect(fixture.count('/payments/complete', 'POST')).toBe(1);
+
+  const rejectedPage = await page.context().newPage();
+  const rejectedFixture = new CartCompositeFixture({ checkoutMode: 'lost' });
+  const rejectedFailures = createRequestFailureAccounting();
+  const rejectedConsoleErrors: ConsoleErrorEvidence[] = [];
+  rejectedPage.on('requestfailed', (request) =>
+    rejectedFailures.observe(request.method(), request.url(), request.failure()?.errorText ?? ''),
+  );
+  rejectedPage.on('console', (message) => {
+    if (message.type() === 'error')
+      rejectedConsoleErrors.push({ text: message.text(), url: message.location().url });
+  });
+  try {
+    await openCart(rejectedPage, rejectedFixture);
+    await rejectedPage.getByRole('button', { name: 'Complete mock payment', exact: true }).click();
+    await expect.poll(() => rejectedFailures.violations().requestFailures.length).toBe(1);
+    await expect.poll(() => rejectedConsoleErrors.length).toBe(1);
+    expect(rejectedFixture.lostCheckoutReceipts).toEqual([]);
+    expect(rejectedFailures.violations().unconsumedExpectedRequestFailures).toEqual([]);
+    expect(
+      findUnexpectedConsoleErrors(rejectedConsoleErrors, [], rejectedFailures.acceptedFailures()),
+    ).toHaveLength(1);
+  } finally {
+    await rejectedPage.close();
+  }
+
   await page.unroute('**/*');
   const ambiguous = new CartCompositeFixture({
     cartCourseIds: [7],
@@ -504,6 +600,23 @@ test('admits loss only from full truth, locks ambiguity, and preserves a proven 
   const terminalRequestCount = provenPrefix.records.length;
   await page.keyboard.press('Enter');
   expect(provenPrefix.records).toHaveLength(terminalRequestCount);
+  expect(pageErrors).toEqual([]);
+  expect(httpFailures.violations()).toEqual({
+    errorResponses: [],
+    unconsumedExpectedResponses: [],
+  });
+  expect(requestFailures.violations()).toEqual({
+    requestFailures: [],
+    unconsumedExpectedRequestFailures: [],
+  });
+  expect(consoleErrors).toHaveLength(1);
+  expect(
+    findUnexpectedConsoleErrors(
+      consoleErrors,
+      httpFailures.acceptedFailures(),
+      requestFailures.acceptedFailures(),
+    ),
+  ).toEqual([]);
 });
 
 test('reconciles a malformed completion exactly once without repeating payment', async ({

@@ -6,5 +6,8 @@ export function summaryFor(report: {
   commands: Array<{ id: string; status: string }>;
   findings: unknown[];
   suppressions: unknown[];
-  advisory: { complexitySignals: unknown[] };
+  advisory: {
+    complexitySignals: unknown[];
+    complexityReview: { basis: 'independent-responsibilities'; guidance: string };
+  };
 }): string;

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MessageSquareMore, Star, Trash2 } from 'lucide-react';
 
@@ -15,6 +15,12 @@ import {
 import { LOCALE_RESOURCES, resolveLocale, type Locale } from '@shared/locale';
 
 import { useCourseReviews } from './useCourseReviews';
+import {
+  REVIEW_RATINGS,
+  ReviewRatingSelector,
+  type ReviewRatingSelection,
+  type ReviewRatingValue,
+} from './ReviewRatingSelector';
 import styles from './CourseReviews.module.css';
 
 export interface CourseReviewsProps {
@@ -22,39 +28,18 @@ export interface CourseReviewsProps {
   readonly canWriteReview: boolean;
 }
 
-type ReviewRatingValue = 1 | 2 | 3 | 4 | 5;
-type ReviewRatingSelection = ReviewRatingValue | 0;
-
-interface ReviewRatingSelectorProps {
-  readonly label: string;
-  readonly value: ReviewRatingSelection;
-  onChange(value: ReviewRatingValue): void;
-}
-
-type ReviewRatingPreviewSource = 'pointer' | 'focus';
-type ReviewRatingVisualState = 'neutral' | 'committed' | 'preview';
-
-interface ReviewRatingPreviewIntent {
-  readonly rating: ReviewRatingValue;
-  readonly source: ReviewRatingPreviewSource;
-  readonly order: number;
-}
-
-interface ReviewRatingActivationLatch {
-  readonly rating: ReviewRatingValue;
-  readonly source: ReviewRatingPreviewSource;
-}
-
-interface ReviewRatingDisplayState {
-  readonly pointerCandidate: ReviewRatingPreviewIntent | null;
-  readonly focusCandidate: ReviewRatingPreviewIntent | null;
-  readonly latestIntent: ReviewRatingPreviewIntent | null;
-  readonly activationLatch: ReviewRatingActivationLatch | null;
-}
-
-interface ReviewRatingDisplayResult {
+interface ReviewDraft {
   readonly rating: ReviewRatingSelection;
-  readonly state: ReviewRatingVisualState;
+  readonly comment: string;
+}
+
+type ReviewMutationKind = 'create' | 'update';
+
+interface SubmittedReviewAttempt {
+  readonly identity: string;
+  readonly generation: number;
+  readonly draft: ReviewDraft;
+  readonly kind: ReviewMutationKind;
 }
 
 interface ReviewStarsProps {
@@ -73,8 +58,6 @@ interface ReviewFormCopy {
 }
 
 type ReviewFormCopyKey = keyof ReviewFormCopy;
-
-const reviewRatings: readonly ReviewRatingValue[] = [1, 2, 3, 4, 5];
 
 function reviewFormCopy(locale: Locale): ReviewFormCopy {
   const courseCopy = LOCALE_RESOURCES[locale].course as Record<string, string>;
@@ -111,166 +94,22 @@ function validRating(value: number): value is ReviewRatingValue {
   return Number.isInteger(value) && value >= 1 && value <= 5;
 }
 
-function ratingDisplayResult(
-  displayState: ReviewRatingDisplayState,
-  committedRating: ReviewRatingSelection,
-): ReviewRatingDisplayResult {
-  const pointerCandidate = displayState.pointerCandidate;
-  const focusCandidate = displayState.focusCandidate;
-  const winner =
-    pointerCandidate && focusCandidate
-      ? pointerCandidate.order > focusCandidate.order
-        ? pointerCandidate
-        : focusCandidate
-      : (pointerCandidate ?? focusCandidate);
-  if (winner) return { rating: winner.rating, state: 'preview' };
-  return committedRating > 0
-    ? { rating: committedRating, state: 'committed' }
-    : { rating: 0, state: 'neutral' };
-}
-
-function emptyRatingDisplayState(): ReviewRatingDisplayState {
+function reviewDraft(review: {
+  readonly rating: number;
+  readonly comment: string | null;
+}): ReviewDraft {
   return {
-    pointerCandidate: null,
-    focusCandidate: null,
-    latestIntent: null,
-    activationLatch: null,
+    rating: validRating(review.rating) ? review.rating : 0,
+    comment: (review.comment ?? '').slice(0, REVIEW_COMMENT_MAX_LENGTH),
   };
 }
 
-function ReviewRatingSelector({ label, value, onChange }: ReviewRatingSelectorProps) {
-  const name = `review-rating-${useId()}`;
-  const [displayState, setDisplayState] =
-    useState<ReviewRatingDisplayState>(emptyRatingDisplayState);
-  const previewOrderRef = useRef(0);
-  const pointerActivationRef = useRef<number | null>(null);
-  const pointerActivationSequenceRef = useRef(0);
-  const ratingOptionsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const deferPointerActivationReset = (event: PointerEvent) => {
-      if (pointerActivationRef.current !== event.pointerId) return;
-      const target = event.target;
-      if (!(target instanceof Node) || !ratingOptionsRef.current?.contains(target)) {
-        pointerActivationRef.current = null;
-        return;
-      }
-      const sequence = pointerActivationSequenceRef.current;
-      window.setTimeout(() => {
-        if (pointerActivationSequenceRef.current === sequence) pointerActivationRef.current = null;
-      }, 0);
-    };
-    const resetCanceledPointerActivation = (event: PointerEvent) => {
-      if (pointerActivationRef.current === event.pointerId) pointerActivationRef.current = null;
-    };
-    document.addEventListener('pointerup', deferPointerActivationReset);
-    document.addEventListener('pointercancel', resetCanceledPointerActivation);
-    return () => {
-      document.removeEventListener('pointerup', deferPointerActivationReset);
-      document.removeEventListener('pointercancel', resetCanceledPointerActivation);
-    };
-  }, []);
-  const recordPreviewIntent = (source: ReviewRatingPreviewSource, rating: ReviewRatingValue) => {
-    setDisplayState((current) => {
-      const latch = current.activationLatch;
-      if (latch?.source === source && latch.rating === rating) return current;
-      const existingCandidate =
-        source === 'pointer' ? current.pointerCandidate : current.focusCandidate;
-      const otherCandidate =
-        source === 'pointer' ? current.focusCandidate : current.pointerCandidate;
-      if (
-        existingCandidate?.rating === rating &&
-        (!otherCandidate || existingCandidate.order > otherCandidate.order)
-      )
-        return current;
-      const intent: ReviewRatingPreviewIntent = {
-        rating,
-        source,
-        order: ++previewOrderRef.current,
-      };
-      return source === 'pointer'
-        ? { ...current, pointerCandidate: intent, latestIntent: intent, activationLatch: null }
-        : { ...current, focusCandidate: intent, latestIntent: intent, activationLatch: null };
-    });
-  };
-  const clearPreviewSource = (source: ReviewRatingPreviewSource) => {
-    setDisplayState((current) => {
-      const retainedCandidate =
-        source === 'pointer' ? current.focusCandidate : current.pointerCandidate;
-      return source === 'pointer'
-        ? {
-            ...current,
-            pointerCandidate: null,
-            latestIntent: retainedCandidate,
-            activationLatch:
-              current.activationLatch?.source === source ? null : current.activationLatch,
-          }
-        : {
-            ...current,
-            focusCandidate: null,
-            latestIntent: retainedCandidate,
-            activationLatch:
-              current.activationLatch?.source === source ? null : current.activationLatch,
-          };
-    });
-  };
-  const commitRating = (rating: ReviewRatingValue) => {
-    const source: ReviewRatingPreviewSource =
-      pointerActivationRef.current === null ? 'focus' : 'pointer';
-    onChange(rating);
-    setDisplayState({
-      pointerCandidate: null,
-      focusCandidate: null,
-      latestIntent: null,
-      activationLatch: { rating, source },
-    });
-    pointerActivationRef.current = null;
-  };
-  const display = ratingDisplayResult(displayState, value);
+function sameReviewDraft(left: ReviewDraft | null, right: ReviewDraft | null): boolean {
   return (
-    <fieldset className={styles.ratingField}>
-      <legend>{label}</legend>
-      <div
-        ref={ratingOptionsRef}
-        className={styles.ratingOptions}
-        onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) clearPreviewSource('focus');
-        }}
-        onPointerDownCapture={(event) => {
-          pointerActivationRef.current = event.pointerId;
-          pointerActivationSequenceRef.current += 1;
-        }}
-        onPointerLeave={() => clearPreviewSource('pointer')}
-      >
-        {reviewRatings.map((rating) => (
-          <label
-            className={styles.ratingOption}
-            key={rating}
-            onPointerEnter={() => recordPreviewIntent('pointer', rating)}
-            onPointerMove={() => recordPreviewIntent('pointer', rating)}
-          >
-            <input
-              className={styles.ratingInput}
-              type="radio"
-              name={name}
-              value={rating}
-              checked={rating === value}
-              aria-label={`${label}: ${rating}/5`}
-              onFocus={() => {
-                if (pointerActivationRef.current === null) recordPreviewIntent('focus', rating);
-              }}
-              onChange={() => commitRating(rating)}
-            />
-            <span
-              className={styles.ratingVisual}
-              data-rating-state={rating <= display.rating ? display.state : 'neutral'}
-              aria-hidden="true"
-            >
-              <Star size={24} fill="none" />
-            </span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
+    left !== null &&
+    right !== null &&
+    left.rating === right.rating &&
+    left.comment === right.comment
   );
 }
 
@@ -279,7 +118,7 @@ function ReviewStars({ label, rating }: ReviewStarsProps) {
   return (
     <div className={styles.reviewRating}>
       <span className={styles.reviewStars} role="img" aria-label={`${label}: ${rating}/5`}>
-        {reviewRatings.map((value) => (
+        {REVIEW_RATINGS.map((value) => (
           <Star
             className={value <= normalizedRating ? styles.reviewStarSelected : undefined}
             key={value}
@@ -343,20 +182,78 @@ export function CourseReviews({ courseId, canWriteReview }: CourseReviewsProps) 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingOwnedReview, setEditingOwnedReview] = useState(false);
   const [focusReviewsAfterDelete, setFocusReviewsAfterDelete] = useState(false);
+  const draftRef = useRef<ReviewDraft>({ rating: 0, comment: '' });
+  const baselineRef = useRef<ReviewDraft | null>(null);
+  const hydratedIdentityRef = useRef<string | null>(null);
+  const activeIdentityRef = useRef(reviews.identity);
+  const activeGenerationRef = useRef(reviews.generation);
+  const submittedAttemptRef = useRef<SubmittedReviewAttempt | null>(null);
+  const previouslyOwnedReviewRef = useRef(false);
+  activeIdentityRef.current = reviews.identity;
+  activeGenerationRef.current = reviews.generation;
   const currentReview = reviews.current.data;
   const hasCurrentReview = reviews.current.isSuccess;
   const isEditing = reviews.hasOwnedReview;
   const mutation = isEditing ? reviews.update : reviews.create;
   useEffect(() => {
-    if (hasCurrentReview) {
-      setRating(currentReview && validRating(currentReview.rating) ? currentReview.rating : 0);
-      setComment((currentReview?.comment ?? '').slice(0, REVIEW_COMMENT_MAX_LENGTH));
-    } else if (reviews.noOwnedReview) {
+    if (hydratedIdentityRef.current !== reviews.identity) {
+      hydratedIdentityRef.current = reviews.identity;
+      baselineRef.current = null;
+      draftRef.current = { rating: 0, comment: '' };
       setRating(0);
       setComment('');
       setEditingOwnedReview(false);
+      setConfirmDelete(false);
+      previouslyOwnedReviewRef.current = false;
     }
-  }, [currentReview, hasCurrentReview, reviews.noOwnedReview]);
+    if (hasCurrentReview) {
+      const nextBaseline = reviewDraft(currentReview as NonNullable<typeof currentReview>);
+      const previousBaseline = baselineRef.current;
+      const wasClean = sameReviewDraft(draftRef.current, previousBaseline);
+      baselineRef.current = nextBaseline;
+      if (wasClean || previousBaseline === null) {
+        draftRef.current = nextBaseline;
+        setRating(nextBaseline.rating);
+        setComment(nextBaseline.comment);
+      }
+      previouslyOwnedReviewRef.current = true;
+    } else if (
+      reviews.noOwnedReview &&
+      (baselineRef.current === null || previouslyOwnedReviewRef.current)
+    ) {
+      const emptyDraft = { rating: 0, comment: '' } as const;
+      baselineRef.current = emptyDraft;
+      draftRef.current = emptyDraft;
+      setRating(emptyDraft.rating);
+      setComment(emptyDraft.comment);
+      setEditingOwnedReview(false);
+      previouslyOwnedReviewRef.current = false;
+    }
+  }, [currentReview, hasCurrentReview, reviews.identity, reviews.noOwnedReview]);
+  const acceptSavedReview = useCallback(
+    (savedReview: NonNullable<typeof currentReview>, submittedAttempt: SubmittedReviewAttempt) => {
+      if (
+        activeIdentityRef.current !== submittedAttempt.identity ||
+        activeGenerationRef.current !== submittedAttempt.generation ||
+        !sameReviewDraft(draftRef.current, submittedAttempt.draft)
+      )
+        return;
+      const nextBaseline = reviewDraft(savedReview);
+      baselineRef.current = nextBaseline;
+      draftRef.current = nextBaseline;
+      setRating(nextBaseline.rating);
+      setComment(nextBaseline.comment);
+      setEditingOwnedReview(false);
+      submittedAttemptRef.current = null;
+    },
+    [],
+  );
+  useEffect(() => {
+    const submittedAttempt = submittedAttemptRef.current;
+    if (submittedAttempt?.kind !== 'create' || !reviews.create.isSuccess || !reviews.create.data)
+      return;
+    acceptSavedReview(reviews.create.data, submittedAttempt);
+  }, [acceptSavedReview, reviews.create.data, reviews.create.isSuccess]);
   useEffect(() => {
     if (confirmDelete || !focusReviewsAfterDelete) return;
 
@@ -367,15 +264,33 @@ export function CourseReviews({ courseId, canWriteReview }: CourseReviewsProps) 
     event.preventDefault();
     if (!validRating(rating)) return;
     const body = { rating, comment: comment.trim() || null };
-    if (isEditing)
+    const submittedDraft: ReviewDraft = { rating, comment };
+    const submittedGeneration = reviews.generation;
+    const kind: ReviewMutationKind = isEditing ? 'update' : 'create';
+    submittedAttemptRef.current = {
+      identity: reviews.identity,
+      generation: submittedGeneration,
+      draft: submittedDraft,
+      kind,
+    };
+    if (kind === 'update')
       reviews.update.mutate(body, {
-        onSuccess: () => setEditingOwnedReview(false),
+        onSuccess: (savedReview) => {
+          if (!savedReview) {
+            setEditingOwnedReview(false);
+            return;
+          }
+          const submittedAttempt = submittedAttemptRef.current;
+          if (submittedAttempt?.kind === 'update') acceptSavedReview(savedReview, submittedAttempt);
+        },
       });
     else reviews.create.mutate(body);
   };
   const cancelEditing = () => {
-    setRating(currentReview && validRating(currentReview.rating) ? currentReview.rating : 0);
-    setComment((currentReview?.comment ?? '').slice(0, REVIEW_COMMENT_MAX_LENGTH));
+    const baseline = baselineRef.current ?? { rating: 0, comment: '' };
+    draftRef.current = baseline;
+    setRating(baseline.rating);
+    setComment(baseline.comment);
     setEditingOwnedReview(false);
   };
   const mutationError = mutation.error ? t('common:pleaseTryAgain') : null;
@@ -386,7 +301,14 @@ export function CourseReviews({ courseId, canWriteReview }: CourseReviewsProps) 
     canShowForm && (!isEditing || editingOwnedReview) ? (
       <form className={styles.form} data-part="review-form" onSubmit={submit}>
         <h3>{isEditing ? t('course:editReview') : t('course:writeReview')}</h3>
-        <ReviewRatingSelector label={t('course:ratingLabel')} value={rating} onChange={setRating} />
+        <ReviewRatingSelector
+          label={t('course:ratingLabel')}
+          value={rating}
+          onChange={(nextRating) => {
+            draftRef.current = { ...draftRef.current, rating: nextRating };
+            setRating(nextRating);
+          }}
+        />
         <Textarea
           fieldClassName={styles.commentField}
           label={localizedCourseCopy.reviewCommentPrompt}
@@ -398,7 +320,11 @@ export function CourseReviews({ courseId, canWriteReview }: CourseReviewsProps) 
             </span>
           }
           value={comment}
-          onChange={(event) => setComment(event.target.value.slice(0, REVIEW_COMMENT_MAX_LENGTH))}
+          onChange={(event) => {
+            const nextComment = event.target.value.slice(0, REVIEW_COMMENT_MAX_LENGTH);
+            draftRef.current = { ...draftRef.current, comment: nextComment };
+            setComment(nextComment);
+          }}
         />
         {mutationError ? (
           <Notice tone="error" title={t('common:unableToCompleteAction')}>

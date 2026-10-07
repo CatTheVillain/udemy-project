@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
@@ -16,7 +16,8 @@ import {
   Skeleton,
   SkeletonGroup,
 } from '@shared/ui/primitives';
-import { ApiError } from '@shared/api';
+import { ApiError, type SessionCacheEpoch } from '@shared/api';
+import { instructorCourseRosterQueryKey } from '@shared/api/query-keys';
 import styles from './InstructorCourseEnrollmentsPage.module.css';
 
 function positiveSafeInteger(value: string | null | undefined): number | null {
@@ -67,14 +68,28 @@ export function InstructorCourseEnrollmentsPage() {
   const { courseId } = useParams();
   const [params, setParams] = useSearchParams();
   const session = useSession();
+  const queryClient = useQueryClient();
   const heading = useRef<HTMLHeadingElement>(null);
   const id = positiveSafeInteger(courseId);
   const page = pageFrom(params.get('page'));
+  const cacheEpoch = session.cacheEpoch ?? null;
+  const previousCacheEpochRef = useRef<SessionCacheEpoch | null>(null);
+  if (cacheEpoch !== null) previousCacheEpochRef.current = cacheEpoch;
+  const queryEpoch = cacheEpoch ?? previousCacheEpochRef.current;
   const roster = useQuery({
-    queryKey: ['instructor-course-enrollments', session.cacheEpoch ?? null, id, page],
+    queryKey:
+      queryEpoch !== null && id !== null
+        ? instructorCourseRosterQueryKey(queryEpoch, id, page)
+        : ['disabled', 'instructor-course-enrollments'],
     queryFn: ({ signal }) => requestCourseEnrollments(session, id as number, page, signal),
-    enabled: id !== null,
+    enabled: cacheEpoch !== null && id !== null,
   });
+  const disabledRosterError =
+    cacheEpoch === null && queryEpoch !== null && id !== null
+      ? queryClient.getQueryState(instructorCourseRosterQueryKey(queryEpoch, id, page))?.error
+      : null;
+  const rosterError = roster.isError ? roster.error : disabledRosterError;
+  const hasRosterError = rosterError !== null && rosterError !== undefined;
   useEffect(() => {
     if (roster.isSuccess) heading.current?.focus();
   }, [roster.isSuccess, page]);
@@ -86,7 +101,7 @@ export function InstructorCourseEnrollmentsPage() {
         <Notice tone="error">{t('instructor:courseEnrollmentsThisCourseWasNotFound')}</Notice>
       </article>
     );
-  if (roster.isPending)
+  if (cacheEpoch !== null && roster.isPending)
     return (
       <article className={styles.page}>
         <InstructorCoursesReturnLink />
@@ -98,7 +113,7 @@ export function InstructorCourseEnrollmentsPage() {
         </SkeletonGroup>
       </article>
     );
-  if (roster.isError)
+  if (hasRosterError)
     return (
       <article className={styles.page}>
         <InstructorCoursesReturnLink />
@@ -106,20 +121,23 @@ export function InstructorCourseEnrollmentsPage() {
           {t('routes:courseEnrollmentsTitle')}
         </h1>
         <Notice tone="error">
-          <p>{failure(roster.error, t)}</p>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              void roster.refetch();
-            }}
-          >
-            {t('routes:tryAgain')}
-          </Button>
+          <p>{failure(rosterError, t)}</p>
+          {cacheEpoch !== null ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                void roster.refetch();
+              }}
+            >
+              {t('routes:tryAgain')}
+            </Button>
+          ) : null}
         </Notice>
       </article>
     );
-  const result = roster.data;
+  const result = cacheEpoch !== null ? roster.data : undefined;
+  if (!result) return null;
   return (
     <article className={styles.page}>
       <InstructorCoursesReturnLink />

@@ -9,11 +9,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import {
-  AppShell,
-  claimInstructorCoursesNewTabFocus,
-  presentCart,
-} from '../../src/app/layouts/AppShell';
+import { AppShell } from '../../src/app/layouts/AppShell';
+import { claimInstructorCoursesNewTabFocus } from '../../src/app/layouts/instructor-courses-focus-marker';
+import { presentCart } from '../../src/app/layouts/navigation-presentation';
 import { AppRouter } from '../../src/app/router/AppRouter';
 import { SessionProvider, type AccessTokenStore } from '../../src/features/auth-session';
 import { INSTRUCTOR_COURSE_CREATE_REQUEST_EVENT } from '../../src/features/instructor-courses';
@@ -23,14 +21,6 @@ import { localeRuntime, LocaleProvider } from '../../src/shared/locale';
 
 const APP_SHELL_STYLES = readFileSync(
   pathToFileURL(resolve(process.cwd(), 'src/app/layouts/AppShell.module.css')),
-  'utf8',
-);
-const APP_SHELL_SOURCE = readFileSync(
-  pathToFileURL(resolve(process.cwd(), 'src/app/layouts/AppShell.tsx')),
-  'utf8',
-);
-const ACCOUNT_MENU_SOURCE = readFileSync(
-  pathToFileURL(resolve(process.cwd(), 'src/app/layouts/AccountMenu.tsx')),
   'utf8',
 );
 const DESKTOP_MEDIA_QUERY_MARKER = '@media (min-width: 768px) {';
@@ -511,8 +501,14 @@ describe('AppShell student cart query and presentation', () => {
     }
   });
 
-  it('keeps fractional viewport widths below 768px in the compact header range', () => {
-    expect(APP_SHELL_SOURCE).toContain("const STUDENT_MOBILE_QUERY = '(max-width: 767.98px)'");
+  it('renders the compact anonymous header and fallback navigation below the desktop breakpoint', async () => {
+    stubCompactViewport();
+    renderShell(authenticatedClient('student'), null, '/');
+
+    const header = document.querySelector<HTMLElement>('[data-app-shell-header]');
+    expect(header?.className).toContain('headerAnonymousMobile');
+    expect(await screen.findByRole('navigation', { name: 'Anonymous navigation' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Cart' })).toBeNull();
     expect(APP_SHELL_STYLES).toContain('@media (max-width: 767.98px) {');
     expect(APP_SHELL_STYLES).toContain('@media (min-width: 480px) and (max-width: 767.98px) {');
   });
@@ -660,12 +656,19 @@ describe('AppShell student cart query and presentation', () => {
     ).toBe(true);
   });
 
-  it.each([1, 9, 10, 99, 100])('presents known cart count %s as a badge', (itemCount) => {
-    const displayedCount = itemCount >= 100 ? '99+' : String(itemCount);
-    expect(presentCart(itemCount)).toEqual({
-      badge: displayedCount,
-    });
-  });
+  it.each([
+    [undefined, null],
+    [1, '1'],
+    [9, '9'],
+    [10, '10'],
+    [99, '99'],
+    [100, '99+'],
+  ])(
+    'presents cart count %s as badge %s',
+    (itemCount: number | undefined, badge: string | null) => {
+      expect(presentCart(itemCount)).toEqual({ badge });
+    },
+  );
 
   it('does not fetch API-002 or render assistant controls for anonymous, instructor, or admin sessions', async () => {
     const anonymousRequest = vi.fn(authenticatedClient('student').request);
@@ -821,16 +824,17 @@ describe('AppShell student cart query and presentation', () => {
     expect(screen.getByRole('tooltip', { name: 'AI chat' })).toBeTruthy();
   });
 
-  it('leaves no localizable DRAFT-18 residual literals while retaining only the exact LearnHub wordmark invariant', () => {
-    expect(ACCOUNT_MENU_SOURCE).not.toMatch(/>\s*Log out\s*</);
-    expect(APP_SHELL_SOURCE).not.toContain('aria-label="Student navigation"');
-    expect(APP_SHELL_SOURCE).not.toContain('aria-label="Anonymous navigation"');
-    expect(APP_SHELL_SOURCE).not.toMatch(/>\s*Skip to main content\s*</);
-    expect(APP_SHELL_SOURCE).not.toContain('aria-label="LearnHub home"');
-    expect(APP_SHELL_SOURCE).not.toMatch(/>\s*Create course\s*</);
-    expect(
-      APP_SHELL_SOURCE.match(/<span className=\{styles\.brandWordmark\}>LearnHub<\/span>/g),
-    ).toHaveLength(1);
+  it('renders one accessible LearnHub brand with the shell landmarks through the DOM', async () => {
+    renderShell(authenticatedClient('instructor'), 'instructor-token', '/instructor/courses');
+
+    const brand = await screen.findByRole('link', { name: 'LearnHub home' });
+    expect(screen.getAllByRole('link', { name: 'LearnHub home' })).toHaveLength(1);
+    expect(brand.textContent?.trim()).toBe('LearnHub');
+    expect(screen.getByRole('link', { name: 'Skip to main content' }).getAttribute('href')).toBe(
+      '#main-content',
+    );
+    expect(screen.getByRole('main').getAttribute('id')).toBe('main-content');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeTruthy();
   });
 
   it.each(RESIDUAL_LOCALE_EXPECTATIONS)(
@@ -1110,6 +1114,25 @@ describe('AppShell student cart query and presentation', () => {
       '/ai-chat',
     );
     expect(within(drawer).getByRole('button', { name: 'Log out' })).toBeTruthy();
+  });
+
+  it('keeps compact Instructor actions ordered, removes the duplicate header creation action, and retains drawer creation', async () => {
+    stubCompactViewport();
+    renderShell(authenticatedClient('instructor'), 'instructor-token', '/instructor/courses');
+
+    const menu = await screen.findByRole('button', { name: 'Open navigation' });
+    const profile = screen.getByRole('button', { name: 'Account menu for instructor User' });
+    const language = screen.getByRole('button', { name: 'Change language' });
+
+    expect(menu.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      profile.compareDocumentPosition(language) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Create course' })).toBeNull();
+
+    fireEvent.click(menu);
+    const drawer = await screen.findByRole('dialog', { name: 'Menu' });
+    expect(within(drawer).getByRole('button', { name: 'Create course' })).toBeTruthy();
   });
 
   it('waits for the Instructor drawer to close before requesting the create course form', async () => {

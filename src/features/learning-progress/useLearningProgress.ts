@@ -61,6 +61,13 @@ export interface LearningWorkspaceWorkflow {
 const SUCCESS_FEEDBACK_VISIBLE_MS = 4000;
 const SUCCESS_FEEDBACK_EXIT_MS = 120;
 
+type TransientLessonProgressFeedbackTone = 'info' | 'success';
+
+interface LessonCompletionMutationResult {
+  readonly lessonId: number;
+  readonly completed: boolean;
+}
+
 export function useLearningList(page: number): LearningListWorkflow {
   const session = useSession();
   const subject = learningEpoch(session);
@@ -93,8 +100,8 @@ export function useLearningWorkspace(
   feedbackRef.current = feedback;
   const feedbackMotionRef = useRef(feedbackMotion);
   feedbackMotionRef.current = feedbackMotion;
-  const feedbackVisibleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const feedbackExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const feedbackVisibleTimerRef = useRef<number | null>(null);
+  const feedbackExitTimerRef = useRef<number | null>(null);
   const [mutationUnavailableScope, setMutationUnavailableScope] =
     useState<MutationUnavailableScope | null>(null);
   const mutationUnavailableScopeRef = useRef(mutationUnavailableScope);
@@ -103,8 +110,9 @@ export function useLearningWorkspace(
   const [pending, setPending] = useState<ReadonlyMap<string, LessonProgressAttempt>>(new Map());
 
   const clearFeedbackTimers = useCallback(() => {
-    if (feedbackVisibleTimerRef.current !== null) clearTimeout(feedbackVisibleTimerRef.current);
-    if (feedbackExitTimerRef.current !== null) clearTimeout(feedbackExitTimerRef.current);
+    if (feedbackVisibleTimerRef.current !== null)
+      window.clearTimeout(feedbackVisibleTimerRef.current);
+    if (feedbackExitTimerRef.current !== null) window.clearTimeout(feedbackExitTimerRef.current);
     feedbackVisibleTimerRef.current = null;
     feedbackExitTimerRef.current = null;
   }, []);
@@ -128,7 +136,7 @@ export function useLearningWorkspace(
 
   const setTransientFeedback = useCallback(
     (
-      tone: Extract<LessonProgressFeedback['tone'], 'info' | 'success'>,
+      tone: TransientLessonProgressFeedbackTone,
       message: string,
       attempt: LessonProgressAttempt,
     ) => {
@@ -141,7 +149,7 @@ export function useLearningWorkspace(
       ) {
         replaceFeedback({ tone, message, visibility: 'visible' });
       }
-      feedbackVisibleTimerRef.current = setTimeout(() => {
+      feedbackVisibleTimerRef.current = window.setTimeout(() => {
         if (currentScopeRef.current !== attempt.workspaceIdentity) return;
         const currentFeedback = feedbackRef.current;
         if (currentFeedback?.tone === tone) {
@@ -151,7 +159,7 @@ export function useLearningWorkspace(
           replaceFeedback(null);
           return;
         }
-        feedbackExitTimerRef.current = setTimeout(() => {
+        feedbackExitTimerRef.current = window.setTimeout(() => {
           if (currentScopeRef.current === attempt.workspaceIdentity) replaceFeedback(null);
         }, SUCCESS_FEEDBACK_EXIT_MS);
       }, SUCCESS_FEEDBACK_VISIBLE_MS);
@@ -198,7 +206,7 @@ export function useLearningWorkspace(
   });
 
   const mutation = useMutation<
-    { lessonId: number; completed: boolean },
+    LessonCompletionMutationResult,
     unknown,
     LessonProgressAttempt,
     LessonMutationSnapshot

@@ -1,5 +1,8 @@
+import { resolve } from 'node:path';
+
 import { createServer } from 'vite';
 import { resolveAppShellTestPort } from './app-shell-harness';
+import { startFixturePreviewServer } from './support/fixture-preview-server';
 import { createViteServerLifecycle } from './support/vite-server-lifecycle';
 
 export type AppShellServerCleanup = () => Promise<void>;
@@ -33,6 +36,7 @@ export async function startAppShellViteServer(
       host: '127.0.0.1',
       port,
       strictPort: true,
+      watch: null,
     },
   });
 
@@ -52,6 +56,15 @@ export async function startAppShellViteServer(
   }
 
   return cleanup;
+}
+
+export async function startAppShellPreviewServer(): Promise<AppShellServerCleanup> {
+  const port = resolveAppShellTestPort();
+  return startFixturePreviewServer({
+    fixtureRoot: resolve(process.cwd(), 'runtime-temp', 'fe014-preview'),
+    port,
+    apiBaseUrl: `http://127.0.0.1:${port}`,
+  });
 }
 
 export default async function startAppShellServer() {

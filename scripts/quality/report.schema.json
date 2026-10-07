@@ -20,7 +20,7 @@
     "integrity"
   ],
   "properties": {
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "scope": { "enum": ["full", "ci"] },
     "sha": { "$ref": "#/definitions/sha" },
     "target": { "$ref": "#/definitions/target" },
@@ -161,19 +161,30 @@
     },
     "suppression": {
       "type": "object",
-      "required": ["ruleId", "path", "owner", "rationale"],
+      "required": ["ruleId", "path", "symbol", "reason"],
       "properties": {
         "ruleId": { "type": "string", "minLength": 1 },
         "path": { "$ref": "#/definitions/path" },
-        "owner": { "type": "string", "minLength": 1 },
-        "rationale": { "type": "string", "minLength": 1 }
+        "symbol": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },
     "advisory": {
       "type": "object",
-      "required": ["complexitySignals"],
-      "properties": { "complexitySignals": { "type": "array", "items": { "type": "object" } } },
+      "required": ["complexitySignals", "complexityReview"],
+      "properties": {
+        "complexitySignals": { "type": "array", "items": { "type": "object" } },
+        "complexityReview": {
+          "type": "object",
+          "required": ["basis", "guidance"],
+          "properties": {
+            "basis": { "const": "independent-responsibilities" },
+            "guidance": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
       "additionalProperties": false
     },
     "integrity": {

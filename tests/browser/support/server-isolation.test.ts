@@ -1,10 +1,8 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { createServer as createNetServer, type Server } from 'node:net';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { resolve, sep } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resolveConfig } from 'vite';
 
 import startAppShellServer, {
   startAppShellViteServer,
@@ -14,11 +12,8 @@ import {
   startAuthWorkflowsViteServer,
   type AuthWorkflowsServerCleanup,
 } from '../auth-workflows-server';
-import {
-  cartWorkflowOrigin,
-  cartWorkflowViteConfig,
-  waitForCartApplicationReady,
-} from '../cart-workflow-server';
+import startCartWorkflowServer, { cartWorkflowOrigin } from '../cart-workflow-server';
+import * as fixturePreviewServer from './fixture-preview-server';
 
 const temporaryRoots: string[] = [];
 interface ServerScope {
@@ -183,58 +178,24 @@ describe('browser server isolation probes', () => {
     }
   }, 15_000);
 
-  it('ignores a hostile env file while retaining the declared API definition', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'learnhub-hostile-env-'));
-    temporaryRoots.push(root);
-    await writeFile(
-      join(root, '.env'),
-      [
-        'VITE_API_BASE_URL=https://hostile.example/private',
-        'VITE_UNDECLARED_SECRET=must-not-load',
-        'MALFORMED LINE',
-      ].join('\n'),
-      'utf8',
-    );
+  it('delegates Cart preview containment to the built-fixture helper', async () => {
+    const cleanup = vi.fn<[], Promise<void>>().mockResolvedValue(undefined);
+    const startFixturePreviewServer = vi
+      .spyOn(fixturePreviewServer, 'startFixturePreviewServer')
+      .mockResolvedValue(cleanup);
+    try {
+      const returnedCleanup = await startCartWorkflowServer();
 
-    const config = await resolveConfig(cartWorkflowViteConfig(root), 'serve');
-    expect(config.env.VITE_API_BASE_URL).not.toBe('https://hostile.example/private');
-    expect(config.env.VITE_UNDECLARED_SECRET).toBeUndefined();
-    expect(config.define?.['import.meta.env.VITE_API_BASE_URL']).toBe(
-      JSON.stringify(cartWorkflowOrigin),
-    );
-    expect(config.server.port).toBe(4177);
-    expect(config.server.strictPort).toBe(true);
-  });
-
-  it('waits for the Cart document and transformed entry instead of accepting a listener alone', async () => {
-    const appHtml =
-      '<!doctype html><html><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>';
-    const fetchReady = vi
-      .fn<[input: string, init: RequestInit], Promise<Response>>()
-      .mockResolvedValueOnce(new Response(appHtml, { status: 200 }))
-      .mockResolvedValueOnce(new Response('', { status: 503 }))
-      .mockResolvedValueOnce(new Response(appHtml, { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response('import "/src/app/App.tsx";', {
-          status: 200,
-          headers: { 'content-type': 'application/javascript' },
-        }),
-      );
-    const pause = vi.fn<[milliseconds: number], Promise<void>>().mockResolvedValue(undefined);
-
-    await waitForCartApplicationReady('http://127.0.0.1:4177', {
-      deadlineMs: 1_000,
-      pollIntervalMs: 1,
-      fetchReady,
-      wait: pause,
-    });
-
-    expect(fetchReady.mock.calls.map(([input]) => input)).toEqual([
-      'http://127.0.0.1:4177/cart',
-      'http://127.0.0.1:4177/src/main.tsx',
-      'http://127.0.0.1:4177/cart',
-      'http://127.0.0.1:4177/src/main.tsx',
-    ]);
-    expect(pause).toHaveBeenCalledWith(1);
+      expect(startFixturePreviewServer).toHaveBeenCalledOnce();
+      const [options] = startFixturePreviewServer.mock.calls[0];
+      expect(resolve(options.fixtureRoot).startsWith(`${resolve(process.cwd())}${sep}`)).toBe(true);
+      expect(options).toMatchObject({
+        apiBaseUrl: cartWorkflowOrigin,
+        port: Number(new URL(cartWorkflowOrigin).port),
+      });
+      expect(returnedCleanup).toBe(cleanup);
+    } finally {
+      startFixturePreviewServer.mockRestore();
+    }
   });
 });

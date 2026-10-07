@@ -1,0 +1,38 @@
+import { useEffect, useRef } from 'react';
+
+import type { CartCompositeCheckoutWorkflow } from './use-cart-composite-checkout';
+
+const successfulPaymentNoticeLifetimeMs = 8_000;
+
+export function useCheckoutSuccessNoticeDismissal(checkout: CartCompositeCheckoutWorkflow): void {
+  const successfulCourseIdsRef = useRef<readonly number[]>([]);
+  const dismissSuccessfulCoursesRef = useRef(checkout.dismissSuccessfulCourses);
+  const successfulCourseIds = checkout.results
+    .filter((result) => result.kind === 'active')
+    .map((result) => result.courseId);
+
+  useEffect(() => {
+    successfulCourseIdsRef.current = successfulCourseIds;
+    dismissSuccessfulCoursesRef.current = checkout.dismissSuccessfulCourses;
+  }, [checkout.dismissSuccessfulCourses, successfulCourseIds]);
+
+  useEffect(() => {
+    const courseIds = checkout.results
+      .filter((result) => result.kind === 'active')
+      .map((result) => result.courseId);
+    if (courseIds.length === 0) return undefined;
+    const timeoutId = globalThis.setTimeout(
+      () => dismissSuccessfulCoursesRef.current(courseIds),
+      successfulPaymentNoticeLifetimeMs,
+    );
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [checkout.results]);
+
+  useEffect(
+    () => () => {
+      const courseIds = successfulCourseIdsRef.current;
+      if (courseIds.length > 0) dismissSuccessfulCoursesRef.current(courseIds);
+    },
+    [],
+  );
+}

@@ -10,6 +10,26 @@ export interface ContractAssumption {
   validationMilestone: string;
 }
 
+interface PageQueryInput {
+  page?: number;
+  page_size?: number;
+}
+
+interface NormalizedPageQuery {
+  page: number;
+  page_size: number;
+}
+
+interface LessonPageQueryInput {
+  page?: number;
+  size?: number;
+}
+
+interface NormalizedLessonPageQuery {
+  page: number;
+  size: number;
+}
+
 export const CONTRACT_ASSUMPTIONS = {
   GAP_003: {
     code: 'GAP-003_FORBIDDEN_NOT_FOUND_AMBIGUITY',
@@ -34,9 +54,9 @@ function positiveInteger(value: number | undefined, fallback: number, maximum: n
   return Math.min(maximum, Math.max(1, Math.trunc(value)));
 }
 
-export function normalizePageQuery<T extends { page?: number; page_size?: number }>(
+export function normalizePageQuery<T extends PageQueryInput>(
   query: T,
-): Omit<T, 'page' | 'page_size'> & { page: number; page_size: number } {
+): Omit<T, keyof PageQueryInput> & NormalizedPageQuery {
   return {
     ...query,
     page: positiveInteger(query.page, 1, Number.MAX_SAFE_INTEGER),
@@ -44,9 +64,9 @@ export function normalizePageQuery<T extends { page?: number; page_size?: number
   };
 }
 
-export function normalizeLessonPageQuery<T extends { page?: number; size?: number }>(
+export function normalizeLessonPageQuery<T extends LessonPageQueryInput>(
   query: T,
-): Omit<T, 'page' | 'size'> & { page: number; size: number } {
+): Omit<T, keyof LessonPageQueryInput> & NormalizedLessonPageQuery {
   return {
     ...query,
     page: positiveInteger(query.page, 1, Number.MAX_SAFE_INTEGER),

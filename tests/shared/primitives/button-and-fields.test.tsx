@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 
-import type { PropsWithChildren, ReactNode } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, useState, type PropsWithChildren, type ReactNode } from 'react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { Button, Input, Select, Textarea, VisuallyHidden } from '../../../src/shared/ui/primitives';
+import {
+  Button,
+  Dialog,
+  Input,
+  Select,
+  Textarea,
+  VisuallyHidden,
+} from '../../../src/shared/ui/primitives';
 import { LocaleProvider } from '../../../src/shared/locale';
 
 afterEach(cleanup);
@@ -139,6 +146,7 @@ describe('form primitives', () => {
   });
 
   it('renders Select as the shared listbox pattern with a selected radio option', async () => {
+    const user = userEvent.setup();
     const onValueChange = vi.fn();
     renderWithLocale(
       <Select label="Lesson type" defaultValue="video" onValueChange={onValueChange}>
@@ -152,7 +160,7 @@ describe('form primitives', () => {
     expect(trigger.tagName).toBe('BUTTON');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
 
-    fireEvent.click(trigger);
+    await act(async () => await user.click(trigger));
 
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
     expect(trigger.querySelector('[data-part="select-chevron"]')).toBeTruthy();
@@ -165,14 +173,51 @@ describe('form primitives', () => {
       screen.getByRole('option', { name: 'Video' }).querySelector('[data-part="select-radio"]'),
     ).toBeTruthy();
 
-    fireEvent.pointerDown(screen.getByRole('option', { name: 'Text' }), { button: 0 });
+    await act(async () => await user.click(screen.getByRole('option', { name: 'Text' })));
 
+    expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith('text');
     expect(trigger.textContent).toContain('Text');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('does not commit a cancelled touch gesture or a disabled option', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    renderWithLocale(
+      <Select label="Lesson type" defaultValue="video" onValueChange={onValueChange}>
+        <option value="video">Video</option>
+        <option value="text">Text</option>
+        <option value="pdf" disabled>
+          PDF
+        </option>
+      </Select>,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Lesson type' });
+    await act(async () => await user.click(trigger));
+    const textOption = screen.getByRole('option', { name: 'Text' });
+
+    act(() => {
+      fireEvent.pointerDown(textOption, { button: 0, pointerId: 1, pointerType: 'touch' });
+      fireEvent.pointerLeave(textOption, { pointerId: 1, pointerType: 'touch' });
+      fireEvent.pointerCancel(textOption, { pointerId: 1, pointerType: 'touch' });
+      fireEvent.pointerUp(document.body, { button: 0, pointerId: 1, pointerType: 'touch' });
+    });
+
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(trigger.textContent).toContain('Video');
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    await act(async () => await user.click(screen.getByRole('option', { name: 'PDF' })));
+
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(trigger.textContent).toContain('Video');
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('supports keyboard selection and restores focus after Escape', async () => {
+    const user = userEvent.setup();
     const onValueChange = vi.fn();
     renderWithLocale(
       <Select label="Lesson type" defaultValue="video" onValueChange={onValueChange}>
@@ -184,16 +229,79 @@ describe('form primitives', () => {
 
     const trigger = screen.getByRole('combobox', { name: 'Lesson type' });
     trigger.focus();
-    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Enter' });
+    await act(async () => await user.keyboard('{ArrowDown}'));
+    await act(async () => await user.keyboard('{Enter}'));
 
     expect(onValueChange).toHaveBeenCalledWith('text');
     expect(document.activeElement).toBe(trigger);
 
-    fireEvent.keyDown(trigger, { key: 'Enter' });
-    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+    await act(async () => await user.keyboard('{Enter}'));
+    await act(async () => await user.keyboard('{Escape}'));
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('keeps a real Select usable inside the real Dialog portal and restores both focus boundaries', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+
+    function DialogSelectFixture() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open lesson type dialog
+          </button>
+          <Dialog open={open} title="Choose lesson type" onClose={() => setOpen(false)}>
+            <Select label="Lesson type" defaultValue="video" onValueChange={onValueChange}>
+              <option value="video">Video</option>
+              <option value="text">Text</option>
+              <option value="pdf" disabled>
+                PDF
+              </option>
+            </Select>
+          </Dialog>
+        </>
+      );
+    }
+
+    renderWithLocale(<DialogSelectFixture />);
+    const invoker = screen.getByRole('button', { name: 'Open lesson type dialog' });
+    invoker.focus();
+    await act(async () => await user.click(invoker));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Choose lesson type' });
+    const trigger = within(dialog).getByRole('combobox', { name: 'Lesson type' });
+    expect(dialog.parentElement?.parentElement?.getAttribute('data-dialog-portal-root')).toBe(
+      'true',
+    );
+    await act(async () => await user.click(trigger));
+    const listbox = await screen.findByRole('listbox', { name: 'Lesson type' });
+    await waitFor(() => expect(document.activeElement).toBe(listbox));
+
+    await act(async () => await user.click(screen.getByRole('option', { name: 'Text' })));
+    expect(onValueChange).toHaveBeenCalledOnce();
+    expect(onValueChange).toHaveBeenCalledWith('text');
+    expect(document.activeElement).toBe(trigger);
+    expect(screen.getByRole('dialog', { name: 'Choose lesson type' })).toBe(dialog);
+
+    await act(async () => await user.click(trigger));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('listbox')));
+    const videoOption = screen.getByRole('option', { name: 'Video' });
+    act(() => {
+      fireEvent.pointerDown(videoOption, { button: 0, pointerId: 2, pointerType: 'touch' });
+      fireEvent.pointerCancel(videoOption, { pointerId: 2, pointerType: 'touch' });
+      fireEvent.pointerUp(document.body, { button: 0, pointerId: 2, pointerType: 'touch' });
+    });
+    expect(onValueChange).toHaveBeenCalledOnce();
+    expect(screen.getByRole('dialog', { name: 'Choose lesson type' })).toBe(dialog);
+
+    await act(async () => await user.keyboard('{Escape}'));
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+    await act(async () => await user.keyboard('{Escape}'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(invoker);
   });
 
   it('preserves caller aria-invalid values unless an error forces invalid state', () => {

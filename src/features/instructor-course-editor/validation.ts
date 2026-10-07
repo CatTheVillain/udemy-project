@@ -1,5 +1,46 @@
 import { ApiError } from '@shared/api';
+import type { LessonType } from '@entities/course';
 import type { TFunction } from 'i18next';
+
+export interface InstructorLessonUploadRule {
+  readonly accept: string;
+  readonly descriptionKey:
+    | 'instructor:lessonEditorMp4WebmOrMovUpTo150Mb'
+    | 'instructor:lessonEditorPdfUpTo50Mb';
+  readonly maxBytes: number;
+}
+
+const INSTRUCTOR_LESSON_UPLOAD_RULES: Readonly<
+  Partial<Record<LessonType, InstructorLessonUploadRule>>
+> = {
+  video: {
+    accept: '.mp4,.webm,.mov',
+    maxBytes: 150 * 1024 * 1024,
+    descriptionKey: 'instructor:lessonEditorMp4WebmOrMovUpTo150Mb',
+  },
+  pdf: {
+    accept: '.pdf',
+    maxBytes: 50 * 1024 * 1024,
+    descriptionKey: 'instructor:lessonEditorPdfUpTo50Mb',
+  },
+};
+
+export function getInstructorLessonUploadRule(type: LessonType): InstructorLessonUploadRule | null {
+  return INSTRUCTOR_LESSON_UPLOAD_RULES[type] ?? null;
+}
+
+export function isInstructorLessonUploadFileAccepted(file: File, type: LessonType): boolean {
+  const rule = getInstructorLessonUploadRule(type);
+  if (rule === null) return false;
+  const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
+  return rule.accept.split(',').includes(extension) && file.size <= rule.maxBytes;
+}
+
+export function parseInstructorEditorId(value: string | undefined): number | null {
+  if (!value || !/^\d+$/u.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
 
 export interface InstructorEditorFieldDefinition {
   readonly field: string;
@@ -18,13 +59,36 @@ export interface InstructorEditorErrorCopy {
   readonly badRequestKey: string | null;
 }
 
+interface ResourceFailureMessage {
+  readonly kind: 'resource';
+  readonly key: string;
+}
+interface RequiredFailureMessage {
+  readonly kind: 'required';
+  readonly labelKey: string;
+}
+interface CheckFieldFailureMessage {
+  readonly kind: 'checkField';
+  readonly labelKey: string;
+}
+interface ReviewHighlightedFieldsFailureMessage {
+  readonly kind: 'reviewHighlightedFields';
+}
+interface CouldNotProcessFormFailureMessage {
+  readonly kind: 'couldNotProcessForm';
+}
+interface GenericActionFailureMessage {
+  readonly kind: 'genericAction';
+  readonly actionKey: string;
+}
+
 export type InstructorEditorFailureMessage =
-  | { readonly kind: 'resource'; readonly key: string }
-  | { readonly kind: 'required'; readonly labelKey: string }
-  | { readonly kind: 'checkField'; readonly labelKey: string }
-  | { readonly kind: 'reviewHighlightedFields' }
-  | { readonly kind: 'couldNotProcessForm' }
-  | { readonly kind: 'genericAction'; readonly actionKey: string };
+  | ResourceFailureMessage
+  | RequiredFailureMessage
+  | CheckFieldFailureMessage
+  | ReviewHighlightedFieldsFailureMessage
+  | CouldNotProcessFormFailureMessage
+  | GenericActionFailureMessage;
 
 export interface InstructorEditorFormFailure {
   readonly fields: InstructorEditorFieldErrors;
@@ -32,6 +96,11 @@ export interface InstructorEditorFormFailure {
 }
 
 export type InstructorEditorFieldErrors = Readonly<Record<string, InstructorEditorFailureMessage>>;
+
+export interface ResolvedInstructorEditorFormFailure {
+  readonly fields: Readonly<Record<string, string>>;
+  readonly summary: string;
+}
 
 function safeFieldMessage(labelKey: string, type: string): InstructorEditorFailureMessage {
   const normalizedType = type.toLowerCase();
@@ -71,7 +140,7 @@ export function resolveInstructorEditorFailureMessage(
 export function resolveInstructorEditorFormFailure(
   failure: InstructorEditorFormFailure,
   t: TFunction,
-): { readonly fields: Readonly<Record<string, string>>; readonly summary: string } {
+): ResolvedInstructorEditorFormFailure {
   return {
     fields: Object.fromEntries(
       Object.entries(failure.fields).map(([field, message]) => [

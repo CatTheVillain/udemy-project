@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { queryKeys } from '@entities/api';
 import type { ReviewCreateDto, ReviewUpdateDto } from '@entities/review';
@@ -23,12 +23,29 @@ function currentReviewQueryKey(subject: SessionCacheEpoch, courseId: number) {
   return queryKeys.private.operation(subject, 'API-038', `course:${courseId}:review`);
 }
 
+interface ReviewMutationAttempt {
+  readonly identity: string;
+  readonly generation: number;
+}
+
 export function useCourseReviews(courseId: number) {
   const session = useSession();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const normalizedPage = normalizeReviewPage(page);
   const subject = session.state.status === 'authenticated' ? (session.cacheEpoch ?? null) : null;
+  const identity = `${subject ?? 'anonymous'}:${courseId}`;
+  const activeSessionRef = useRef({ identity, generation: 0 });
+  if (activeSessionRef.current.identity !== identity) {
+    activeSessionRef.current = {
+      identity,
+      generation: activeSessionRef.current.generation + 1,
+    };
+  }
+  const generation = activeSessionRef.current.generation;
+  const isCurrentAttempt = (attempt: ReviewMutationAttempt) =>
+    activeSessionRef.current.identity === attempt.identity &&
+    activeSessionRef.current.generation === attempt.generation;
   const current = useQuery({
     queryKey: subject
       ? currentReviewQueryKey(subject, courseId)
@@ -43,7 +60,8 @@ export function useCourseReviews(courseId: number) {
     queryKey: reviewListQueryKey(courseId, normalizedPage),
     queryFn: ({ signal }) => requestCourseReviews(session, courseId, normalizedPage, signal),
   });
-  const invalidate = async () => {
+  const invalidate = async (attempt: ReviewMutationAttempt) => {
+    if (!isCurrentAttempt(attempt)) return;
     await queryClient.invalidateQueries({
       queryKey: queryKeys.public.operation(
         'API-037',
@@ -51,27 +69,41 @@ export function useCourseReviews(courseId: number) {
       ),
       exact: true,
     });
+    if (!isCurrentAttempt(attempt)) return;
     if (subject)
       await queryClient.invalidateQueries({
         queryKey: currentReviewQueryKey(subject, courseId),
         exact: true,
       });
+    if (!isCurrentAttempt(attempt)) return;
     await queryClient.invalidateQueries({
       queryKey: courseRatingSummaryQueryKey(courseId),
       exact: true,
     });
   };
   const create = useMutation({
+    mutationKey: ['course-review', 'create', identity],
     mutationFn: (body: ReviewCreateDto) => createCourseReview(session, courseId, body),
-    onSuccess: invalidate,
+    onMutate: (): ReviewMutationAttempt => ({ identity, generation }),
+    onSuccess: async (_result, _variables, attempt) => {
+      if (isCurrentAttempt(attempt)) await invalidate(attempt);
+    },
   });
   const update = useMutation({
+    mutationKey: ['course-review', 'update', identity],
     mutationFn: (body: ReviewUpdateDto) => updateCourseReview(session, courseId, body),
-    onSuccess: invalidate,
+    onMutate: (): ReviewMutationAttempt => ({ identity, generation }),
+    onSuccess: async (_result, _variables, attempt) => {
+      if (isCurrentAttempt(attempt)) await invalidate(attempt);
+    },
   });
   const remove = useMutation({
+    mutationKey: ['course-review', 'remove', identity],
     mutationFn: () => deleteCourseReview(session, courseId),
-    onSuccess: invalidate,
+    onMutate: (): ReviewMutationAttempt => ({ identity, generation }),
+    onSuccess: async (_result, _variables, attempt) => {
+      if (isCurrentAttempt(attempt)) await invalidate(attempt);
+    },
   });
   return {
     list,
@@ -81,6 +113,8 @@ export function useCourseReviews(courseId: number) {
     hasOwnedReview,
     noOwnedReview,
     ready: hasOwnedReview || noOwnedReview,
+    identity,
+    generation,
     create,
     update,
     remove,

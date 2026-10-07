@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLayoutEffect, useRef, useState } from 'react';
 
 import { queryKeys } from '@entities/api';
-import type { CheckoutDto, MockPaymentCompleteDto } from '@entities/cart';
+import type { CheckoutDto, MockPaymentCompleteDto, MockPaymentStatusDto } from '@entities/cart';
 import type { EnrollmentStatus } from '@entities/enrollment';
 import { useSession, type SessionContextValue } from '@features/auth-session';
 import { cartQueryKey } from '@features/cart-workflow';
@@ -22,6 +22,8 @@ import {
   type PaymentActionLock,
   type PaymentStatusAttempt,
 } from './checkout-state';
+
+type CheckoutAttemptKind = 'checkout' | 'checkout_recovery' | 'mock_payment' | 'payment_status';
 
 function epochFor(session: SessionContextValue): SessionCacheEpoch | null {
   return session.state.status === 'authenticated' && session.state.user.role === 'student'
@@ -83,7 +85,7 @@ export function useCheckoutCart(scope: CheckoutScope): CheckoutWorkflow {
   }, [scope, subject]);
 
   function identity(
-    kind: CheckoutActiveAttempt['kind'],
+    kind: CheckoutAttemptKind,
     attemptSubject: SessionCacheEpoch,
     attemptScope: CheckoutScope,
   ): string {
@@ -270,7 +272,7 @@ export function useCheckoutCart(scope: CheckoutScope): CheckoutWorkflow {
 
   function completeMockPayment(
     enrollmentId: number,
-    outcome: MockPaymentAttempt['outcome'],
+    outcome: MockPaymentStatusDto,
     refresh: EnrollmentStatusRefresh,
   ): void {
     if (

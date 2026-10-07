@@ -34,10 +34,6 @@ interface CourseRetryFocusIntent {
   readonly target: CourseRecoveryTarget;
 }
 
-interface CourseCatalogReturnNavigationState {
-  readonly returnTo: string;
-}
-
 const COURSE_CATALOG_RETURN_FALLBACK_ORIGIN = 'http://localhost';
 
 function isExactCanonicalCatalogReturnInput(
@@ -48,9 +44,7 @@ function isExactCanonicalCatalogReturnInput(
   return returnTo === canonicalTarget || returnTo === `${origin}${canonicalTarget}`;
 }
 
-function getExactCourseCatalogReturnTo(
-  state: unknown,
-): CourseCatalogReturnNavigationState['returnTo'] | null {
+function getExactCourseCatalogReturnTo(state: unknown): string | null {
   if (!state || typeof state !== 'object') return null;
 
   try {

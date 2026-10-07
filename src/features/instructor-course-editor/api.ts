@@ -1,12 +1,19 @@
-import type {
-  LessonFileUploadAcknowledgementDto,
-  LessonType,
-  LessonUploadStatusDto,
-} from '@entities/course';
-import { mapLessonMediaLocator } from '@entities/course';
+import type { LessonFileUploadAcknowledgementDto, LessonUploadStatusDto } from '@entities/course';
+import { decodeCourseDetailDto, decodeLessonDto, mapLessonMediaLocator } from '@entities/course';
 import type { SessionContextValue } from '@features/auth-session';
 import { requestOperation } from '@features/auth-session';
-import { ApiError, readBoolean, readPositiveInteger, readRecord, readString } from '@shared/api';
+import {
+  ApiError,
+  readNullableString,
+  readPositiveInteger,
+  readRecord,
+  readString,
+} from '@shared/api';
+import {
+  instructorCourseQueryKey,
+  instructorLessonQueryKey,
+  type SessionCacheEpoch,
+} from '@shared/api/query-keys';
 
 import type {
   CreateInstructorLessonInput,
@@ -19,7 +26,6 @@ import type {
   UpdateInstructorLessonInput,
 } from './model';
 
-const LESSON_TYPES = new Set<LessonType>(['video', 'text', 'pdf']);
 const UPLOAD_STATUS_POLL_INTERVAL_MS = 2_000;
 const MAX_UPLOAD_STATUS_LOGICAL_GETS = 15;
 const MAX_UPLOAD_STATUS_ELAPSED_MS = 30_000;
@@ -43,10 +49,6 @@ export interface InstructorLessonUploadStatusObserver {
   dispose(): void;
 }
 
-function nullableString(value: unknown, label: string): string | null {
-  return value === null ? null : readString(value, label);
-}
-
 function readUploadId(value: unknown, label: string): string {
   const uploadId = readString(value, label);
   if (!UPLOAD_ID_PATTERN.test(uploadId)) throw new TypeError(`Invalid ${label}`);
@@ -67,23 +69,18 @@ function isCalendarValidIsoDateTime(value: string): boolean {
   return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth[month - 1];
 }
 
-function lessonType(value: unknown): LessonType {
-  if (typeof value === 'string' && LESSON_TYPES.has(value as LessonType))
-    return value as LessonType;
-  throw new TypeError('Invalid lesson type');
-}
-
 function decodeLesson(value: unknown, expectedCourseId?: number): InstructorEditorLesson {
-  const lesson = readRecord(value, 'lesson');
-  const courseId = expectedCourseId ?? readPositiveInteger(lesson.course_id, 'lesson course id');
+  const lesson = decodeLessonDto(value);
+  if (expectedCourseId !== undefined && lesson.course_id !== expectedCourseId)
+    throw new TypeError('Invalid lesson course id');
   return {
-    id: readPositiveInteger(lesson.id, 'lesson id'),
-    courseId,
-    title: readString(lesson.title, 'lesson title'),
-    lessonType: lessonType(lesson.lesson_type),
-    mediaLocator: mapLessonMediaLocator(nullableString(lesson.download_url, 'lesson download_url')),
-    description: nullableString(lesson.description, 'lesson description'),
-    isPublished: readBoolean(lesson.is_published, 'lesson is_published'),
+    id: lesson.id,
+    courseId: lesson.course_id,
+    title: lesson.title,
+    lessonType: lesson.lesson_type,
+    mediaLocator: mapLessonMediaLocator(lesson.download_url),
+    description: lesson.description,
+    isPublished: lesson.is_published,
   };
 }
 
@@ -127,7 +124,7 @@ function decodeLessonUploadStatus(
   const status = readString(response.status, 'upload status status');
   if (status !== 'queued' && status !== 'processing' && status !== 'ready' && status !== 'failed')
     throw new TypeError('Invalid upload status status');
-  const failureReason = nullableString(response.failure_reason, 'upload status failure reason');
+  const failureReason = readNullableString(response.failure_reason, 'upload status failure reason');
   const updatedAt = readString(response.updated_at, 'upload status updated at');
   if (!isCalendarValidIsoDateTime(updatedAt))
     throw new TypeError('Invalid upload status updated at');
@@ -142,18 +139,23 @@ function decodeLessonUploadStatus(
 }
 
 function decodeCourse(value: unknown): InstructorEditorCourse {
-  const course = readRecord(value, 'course');
-  const instructor = readRecord(course.instructor, 'course instructor');
-  if (!Array.isArray(course.lessons)) throw new TypeError('Invalid course lessons');
-  const id = readPositiveInteger(course.id, 'course id');
+  const course = decodeCourseDetailDto(value);
   return {
-    id,
-    instructorId: readPositiveInteger(instructor.id, 'course instructor id'),
-    title: readString(course.title, 'course title'),
-    description: nullableString(course.description, 'course description'),
-    price: readString(course.price, 'course price'),
-    currency: readString(course.currency, 'course currency'),
-    lessons: course.lessons.map((item) => decodeLesson(item, id)),
+    id: course.id,
+    instructorId: course.instructor.id,
+    title: course.title,
+    description: course.description,
+    price: course.price,
+    currency: course.currency,
+    lessons: course.lessons.map((lesson) => ({
+      id: lesson.id,
+      courseId: course.id,
+      title: lesson.title,
+      lessonType: lesson.lesson_type,
+      mediaLocator: mapLessonMediaLocator(lesson.download_url),
+      description: lesson.description,
+      isPublished: lesson.is_published,
+    })),
   };
 }
 
@@ -163,7 +165,7 @@ function decodeUpdatedCourse(value: unknown): InstructorEditorCourse {
     id: readPositiveInteger(course.id, 'course id'),
     instructorId: readPositiveInteger(course.instructor_id, 'course instructor id'),
     title: readString(course.title, 'course title'),
-    description: nullableString(course.description, 'course description'),
+    description: readNullableString(course.description, 'course description'),
     price: readString(course.price, 'course price'),
     currency: readString(course.currency, 'course currency'),
     lessons: [],
@@ -174,12 +176,12 @@ function decodeDeleteMessage(value: unknown): void {
   readString(readRecord(value, 'delete response').message, 'delete message');
 }
 
-export function instructorEditorCourseQueryKey(epoch: string | null | undefined, courseId: number) {
-  return ['instructor-course-editor', epoch ?? null, 'course', courseId] as const;
+export function instructorEditorCourseQueryKey(epoch: SessionCacheEpoch, courseId: number) {
+  return instructorCourseQueryKey(epoch, courseId);
 }
 
-export function instructorEditorLessonQueryKey(epoch: string | null | undefined, lessonId: number) {
-  return ['instructor-course-editor', epoch ?? null, 'lesson', lessonId] as const;
+export function instructorEditorLessonQueryKey(epoch: SessionCacheEpoch, lessonId: number) {
+  return instructorLessonQueryKey(epoch, lessonId);
 }
 
 export function requestInstructorEditorCourse(
@@ -313,17 +315,17 @@ export function createInstructorLessonUploadStatusObserver({
 }: InstructorLessonUploadStatusObserverOptions): InstructorLessonUploadStatusObserver {
   let stopped = false;
   let logicalGetCount = 0;
-  let pollTimeout: ReturnType<typeof setTimeout> | null = null;
-  let deadlineTimeout: ReturnType<typeof setTimeout> | null = null;
+  let pollTimeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+  let deadlineTimeout: ReturnType<typeof globalThis.setTimeout> | null = null;
   let inFlight: AbortController | null = null;
 
   const clearPendingWork = () => {
     if (pollTimeout !== null) {
-      clearTimeout(pollTimeout);
+      globalThis.clearTimeout(pollTimeout);
       pollTimeout = null;
     }
     if (deadlineTimeout !== null) {
-      clearTimeout(deadlineTimeout);
+      globalThis.clearTimeout(deadlineTimeout);
       deadlineTimeout = null;
     }
     inFlight?.abort();
@@ -362,7 +364,7 @@ export function createInstructorLessonUploadStatusObserver({
           stopWith('unavailable');
           return;
         }
-        pollTimeout = setTimeout(poll, UPLOAD_STATUS_POLL_INTERVAL_MS);
+        pollTimeout = globalThis.setTimeout(poll, UPLOAD_STATUS_POLL_INTERVAL_MS);
       })
       .catch((error: unknown) => {
         if (stopped || inFlight !== controller) return;
@@ -375,7 +377,10 @@ export function createInstructorLessonUploadStatusObserver({
       });
   };
 
-  deadlineTimeout = setTimeout(() => stopWith('unavailable'), MAX_UPLOAD_STATUS_ELAPSED_MS);
+  deadlineTimeout = globalThis.setTimeout(
+    () => stopWith('unavailable'),
+    MAX_UPLOAD_STATUS_ELAPSED_MS,
+  );
   poll();
   return { dispose };
 }

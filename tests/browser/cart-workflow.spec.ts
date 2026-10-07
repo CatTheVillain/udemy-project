@@ -82,24 +82,22 @@ const cartMappedConsumerCopy = {
 } as const;
 
 interface CartRequestLifecycle {
-  initiated: string[];
-  completed: string[];
-  logicalCompleted: string[];
-  aborted: string[];
-  deleteResponses: CartResponseRecord[];
-  responseProvenDeletes: string[];
-  toleratedDeleteAborts: string[];
-  unexpectedFailures: string[];
+  readonly requests: CartRequestRecord[];
+  readonly diagnostics: string[];
+  initialReadBoundary?: number;
 }
 
-interface CartResponseRecord {
+interface CartRequestRecord {
   label: string;
-  status: number;
+  readonly authorization: string | undefined;
+  responseStatus?: number;
+  responseFailure?: Error | null;
+  finished: boolean;
+  failure?: string;
 }
 
-interface SuccessfulDeleteLifecycleExpectation {
-  deleteLabel: string;
-  initiated: string[];
+interface CartLifecycleExpectation {
+  readonly selectedMutations: readonly string[];
 }
 
 function cartApiRequest(request: Request): CartApiRequest | null {
@@ -114,75 +112,122 @@ function cartRequestLabel(request: CartApiRequest): string {
 
 function trackCartRequestLifecycle(page: Page): CartRequestLifecycle {
   const lifecycle: CartRequestLifecycle = {
-    initiated: [],
-    completed: [],
-    logicalCompleted: [],
-    aborted: [],
-    deleteResponses: [],
-    responseProvenDeletes: [],
-    toleratedDeleteAborts: [],
-    unexpectedFailures: [],
+    requests: [],
+    diagnostics: [],
   };
-  const responseProvenDeleteRequests = new WeakSet<Request>();
+  const records = new Map<Request, CartRequestRecord>();
   page.on('request', (request) => {
     const cartRequest = cartApiRequest(request);
-    if (cartRequest) lifecycle.initiated.push(cartRequestLabel(cartRequest));
+    if (!cartRequest) return;
+    const record: CartRequestRecord = {
+      label: cartRequestLabel(cartRequest),
+      authorization: request.headers().authorization,
+      finished: false,
+    };
+    records.set(request, record);
+    lifecycle.requests.push(record);
   });
   page.on('response', (response) => {
     const cartRequest = cartApiRequest(response.request());
-    if (!cartRequest || cartRequest.method !== 'DELETE') return;
-    const label = cartRequestLabel(cartRequest);
-    const record: CartResponseRecord = { label, status: response.status() };
-    lifecycle.deleteResponses.push(record);
-    if (record.status === 204) {
-      responseProvenDeleteRequests.add(response.request());
-      lifecycle.responseProvenDeletes.push(label);
-      lifecycle.logicalCompleted.push(label);
-    }
+    if (!cartRequest) return;
+    const record = records.get(response.request());
+    if (!record) return;
+    record.responseStatus = response.status();
+    void response
+      .finished()
+      .then((failure) => {
+        record.responseFailure = failure;
+      })
+      .catch((error: unknown) => {
+        record.responseFailure = error instanceof Error ? error : new Error(String(error));
+      });
   });
   page.on('requestfinished', (request) => {
     const cartRequest = cartApiRequest(request);
     if (!cartRequest) return;
-    const label = cartRequestLabel(cartRequest);
-    lifecycle.completed.push(label);
-    if (cartRequest.method !== 'DELETE') lifecycle.logicalCompleted.push(label);
+    const record = records.get(request);
+    if (record) record.finished = true;
   });
   page.on('requestfailed', (request) => {
     const cartRequest = cartApiRequest(request);
     if (!cartRequest) return;
-    const label = cartRequestLabel(cartRequest);
-    const errorText = request.failure()?.errorText;
-    if (errorText === 'net::ERR_ABORTED') {
-      lifecycle.aborted.push(label);
-      if (cartRequest.method === 'DELETE') {
-        if (responseProvenDeleteRequests.has(request)) lifecycle.toleratedDeleteAborts.push(label);
-        else lifecycle.unexpectedFailures.push(`${label} ${errorText}`);
-      }
-      return;
-    }
-    lifecycle.unexpectedFailures.push(`${label} ${errorText ?? 'unknown failure'}`);
+    const record = records.get(request);
+    if (record) record.failure = request.failure()?.errorText ?? 'unknown failure';
+  });
+  page.on('pageerror', (error) => lifecycle.diagnostics.push(error.stack ?? error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') lifecycle.diagnostics.push(message.text());
   });
   return lifecycle;
 }
 
-async function expectSuccessfulDeleteLifecycle(
+function markPopulatedCartRead(lifecycle: CartRequestLifecycle) {
+  lifecycle.initialReadBoundary = lifecycle.requests.length;
+}
+
+async function expectSuccessfulCartLifecycle(
   lifecycle: CartRequestLifecycle,
-  expectation: SuccessfulDeleteLifecycleExpectation,
+  expectation: CartLifecycleExpectation,
 ) {
-  await expect.poll(() => lifecycle.initiated).toEqual(expectation.initiated);
+  const initialReadBoundary = lifecycle.initialReadBoundary;
+  if (initialReadBoundary === undefined) throw new Error('Populated Cart read was not marked.');
   await expect
-    .poll(() => lifecycle.deleteResponses)
-    .toEqual([{ label: expectation.deleteLabel, status: 204 }]);
-  await expect.poll(() => lifecycle.responseProvenDeletes).toEqual([expectation.deleteLabel]);
-  await expect.poll(() => lifecycle.toleratedDeleteAborts).toEqual([expectation.deleteLabel]);
+    .poll(() =>
+      lifecycle.requests.every((request) => request.finished || request.failure !== undefined),
+    )
+    .toBe(true);
   await expect
-    .poll(() => lifecycle.logicalCompleted)
-    .toEqual(['GET /cart', expectation.deleteLabel, 'GET /cart']);
-  await expect
-    .poll(() => lifecycle.completed.filter((label) => label === 'GET /cart'))
-    .toEqual(['GET /cart', 'GET /cart']);
-  expect(lifecycle.aborted.filter((label) => label === 'GET /cart')).toEqual(['GET /cart']);
-  expect(lifecycle.unexpectedFailures).toEqual([]);
+    .poll(() =>
+      lifecycle.requests.every(
+        (request) => request.responseFailure !== undefined || request.failure !== undefined,
+      ),
+    )
+    .toBe(true);
+
+  const initialReads = lifecycle.requests
+    .slice(0, initialReadBoundary)
+    .filter(
+      (request) =>
+        request.label === 'GET /cart' &&
+        request.authorization === 'Bearer student-token' &&
+        request.responseStatus === 200 &&
+        request.responseFailure === null &&
+        request.finished,
+    );
+  expect(initialReads.length).toBeGreaterThanOrEqual(1);
+  expect(lifecycle.requests.map((request) => request.label)).toEqual(
+    expect.arrayContaining(['GET /cart', ...expectation.selectedMutations]),
+  );
+  expect(
+    lifecycle.requests.every((request) => request.authorization === 'Bearer student-token'),
+  ).toBe(true);
+  expect(lifecycle.requests.every((request) => request.failure === undefined)).toBe(true);
+  expect(lifecycle.requests.every((request) => request.responseFailure === null)).toBe(true);
+  expect(lifecycle.requests.every((request) => request.finished)).toBe(true);
+  expect(
+    lifecycle.requests.every((request) =>
+      request.label === 'GET /cart'
+        ? request.responseStatus === 200
+        : expectation.selectedMutations.includes(request.label) && request.responseStatus === 204,
+    ),
+  ).toBe(true);
+
+  const mutations = lifecycle.requests.filter((request) => request.label !== 'GET /cart');
+  expect(mutations.map((request) => request.label)).toEqual(expectation.selectedMutations);
+  const lastMutation = Math.max(...mutations.map((request) => lifecycle.requests.indexOf(request)));
+  expect(
+    lifecycle.requests
+      .slice(lastMutation + 1)
+      .some(
+        (request) =>
+          request.label === 'GET /cart' &&
+          request.authorization === 'Bearer student-token' &&
+          request.responseStatus === 200 &&
+          request.responseFailure === null &&
+          request.finished,
+      ),
+  ).toBe(true);
+  expect(lifecycle.diagnostics).toEqual([]);
 }
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
@@ -443,13 +488,21 @@ test.describe('FE-009 cart workflow QA harness', () => {
       throw new Error(`Unexpected cart request ${requestLabel}`);
     });
 
+    const initialCartResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        new URL(response.url()).pathname === '/cart' &&
+        response.status() === 200 &&
+        response.request().resourceType() !== 'document',
+    );
     await page.goto('/cart');
+    const initialFailure = await (await initialCartResponse).finished();
+    if (initialFailure !== null)
+      throw new Error(`Initial Cart response did not finish: ${initialFailure}`);
     await expect(page.getByRole('heading', { name: 'Cart', exact: true, level: 1 })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Cart (1)' })).toBeVisible();
     await expect(page.getByLabel('Cart total').locator('strong')).toHaveText(exactLongTotalEnglish);
-    await expect.poll(() => lifecycle.completed).toEqual(['GET /cart']);
-    await expect.poll(() => lifecycle.aborted).toEqual(['GET /cart']);
-    expect(lifecycle.initiated).toEqual(['GET /cart', 'GET /cart']);
+    markPopulatedCartRead(lifecycle);
 
     const courseLink = page.getByRole('link', { name: cartItem.course.title, exact: true });
     await courseLink.hover();
@@ -472,19 +525,37 @@ test.describe('FE-009 cart workflow QA harness', () => {
         contentType: 'image/png',
       });
     }
+    const deleteResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' &&
+        new URL(response.url()).pathname === '/cart/items/7' &&
+        response.status() === 204,
+    );
+    const revalidationResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        new URL(response.url()).pathname === '/cart' &&
+        response.status() === 200,
+    );
     await page.getByRole('button', { name: /remove a deliberately long cart course/i }).click();
+    const [deleteFailure, revalidationFailure] = await Promise.all([
+      (await deleteResponse).finished(),
+      (await revalidationResponse).finished(),
+    ]);
+    if (deleteFailure !== null)
+      throw new Error(`Cart delete response did not finish: ${deleteFailure}`);
+    if (revalidationFailure !== null)
+      throw new Error(`Cart revalidation response did not finish: ${revalidationFailure}`);
     await expect(page.getByRole('heading', { name: 'Your cart is empty' })).toBeFocused();
     await expect(page.getByRole('status')).toContainText('Course removed from cart.');
-    await expectSuccessfulDeleteLifecycle(lifecycle, {
-      deleteLabel: 'DELETE /cart/items/7',
-      initiated: ['GET /cart', 'GET /cart', 'DELETE /cart/items/7', 'GET /cart'],
-    });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    expect(
-      await page.evaluate(() =>
-        getComputedStyle(document.documentElement).getPropertyValue('--duration-base').trim(),
-      ),
-    ).toBe('0ms');
+    const reducedMotionDuration = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--duration-base').trim(),
+    );
+    expect(['0ms', '0s'].includes(reducedMotionDuration)).toBe(true);
+    await expectSuccessfulCartLifecycle(lifecycle, {
+      selectedMutations: ['DELETE /cart/items/7'],
+    });
   });
 
   test('keeps the initiating remove control visually unchanged without a loading spinner while its DELETE request is pending', async ({
@@ -558,12 +629,13 @@ test.describe('FE-009 cart workflow QA harness', () => {
     await controller.install();
 
     await page.goto('/cart');
+    await expect(page.getByRole('button', { name: 'Clear cart' }).first()).toBeVisible();
+    markPopulatedCartRead(lifecycle);
     await page.getByRole('button', { name: 'Clear cart' }).first().click();
     await page.getByRole('button', { name: 'Clear cart' }).last().click();
     await expect(page.getByRole('heading', { name: 'Your cart is empty' })).toBeFocused();
-    await expectSuccessfulDeleteLifecycle(lifecycle, {
-      deleteLabel: 'DELETE /cart',
-      initiated: ['GET /cart', 'GET /cart', 'DELETE /cart', 'GET /cart'],
+    await expectSuccessfulCartLifecycle(lifecycle, {
+      selectedMutations: ['DELETE /cart'],
     });
   });
 
@@ -582,6 +654,8 @@ test.describe('FE-009 cart workflow QA harness', () => {
 
     await page.goto('/cart');
     const clearInvoker = page.getByRole('button', { name: 'Clear cart' }).first();
+    await expect(clearInvoker).toBeVisible();
+    markPopulatedCartRead(lifecycle);
     await clearInvoker.click();
     const dialog = page.getByRole('dialog', { name: 'Clear cart?' });
     await dialog.getByRole('button', { name: 'Cancel' }).click();
@@ -623,9 +697,8 @@ test.describe('FE-009 cart workflow QA harness', () => {
 
     controller.completePendingClear();
     await expect(page.getByRole('heading', { name: 'Your cart is empty' })).toBeFocused();
-    await expectSuccessfulDeleteLifecycle(lifecycle, {
-      deleteLabel: 'DELETE /cart',
-      initiated: ['GET /cart', 'GET /cart', 'DELETE /cart', 'GET /cart'],
+    await expectSuccessfulCartLifecycle(lifecycle, {
+      selectedMutations: ['DELETE /cart'],
     });
     expect(runtimeErrors).toEqual([]);
   });
@@ -708,6 +781,8 @@ for (const locale of ['ru', 'uz'] as const) {
     await controller.install();
 
     await controller.navigateToCart();
+    await expect(page.getByRole('heading', { name: 'Cart', exact: true, level: 1 })).toBeVisible();
+    markPopulatedCartRead(lifecycle);
     await page.getByRole('button', { name: 'Change language' }).press('Enter');
     await page
       .getByRole('button', { name: locale === 'ru' ? 'Русский' : "O'zbek", exact: true })
@@ -746,10 +821,9 @@ for (const locale of ['ru', 'uz'] as const) {
     await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
     await cdp.detach();
 
-    await expect
-      .poll(() => lifecycle.responseProvenDeletes)
-      .toEqual(['DELETE /cart/items/7', 'DELETE /cart']);
-    expect(lifecycle.unexpectedFailures).toEqual([]);
+    await expectSuccessfulCartLifecycle(lifecycle, {
+      selectedMutations: ['DELETE /cart/items/7', 'DELETE /cart'],
+    });
     expect(diagnostics).toEqual([]);
   });
 }

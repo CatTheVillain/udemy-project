@@ -8,6 +8,7 @@ import {
   useCourseChat,
   type ChatMessage,
   type CourseChatContext,
+  type CourseChatErrorState,
   type CourseChatWorkflow,
 } from '@features/course-chat';
 
@@ -20,7 +21,7 @@ interface CourseChatPanelProps {
   readonly focusOnOpen?: boolean;
 }
 
-function errorCopy(t: TFunction, error: ReturnType<typeof useCourseChat>['error']) {
+function errorCopy(t: TFunction, error: CourseChatErrorState | null) {
   if (error === 'sign_in_required')
     return [
       t('cart:signInRequired', { defaultValue: 'Sign in required' }),

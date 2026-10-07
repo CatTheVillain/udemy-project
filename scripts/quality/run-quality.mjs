@@ -112,14 +112,13 @@ async function readProducerResults(path) {
 }
 
 async function staticAnalysis() {
-  const { collectComplexitySignals, collectStaticFindings, staticSuppressions } = await import(
-    './check-static.mjs'
-  );
+  const { collectComplexitySignals, collectStaticFindings, complexityReview, staticSuppressions } =
+    await import('./check-static.mjs');
   return {
     findings: await collectStaticFindings(),
     suppressions: staticSuppressions(),
-    advisory: { complexitySignals: await collectComplexitySignals() },
-    configVersions: { reportSchema: REPORT_SCHEMA_VERSION, staticRules: 1 },
+    advisory: { complexitySignals: await collectComplexitySignals(), complexityReview },
+    configVersions: { reportSchema: REPORT_SCHEMA_VERSION, staticRules: 2 },
   };
 }
 
@@ -296,8 +295,8 @@ async function ordinaryMode(values, output, scope) {
     },
     suppressions: analysis.suppressions,
     limitations: [
-      'Report pass is deterministic evidence only; it is not a semantic Review or QA verdict.',
-      'Complexity signals are advisory and do not affect the outcome.',
+      'Report pass is deterministic evidence only; it is not a semantic or architectural Review or QA verdict.',
+      'Complexity signals are advisory and require responsibility-based review; they do not affect the outcome.',
     ],
     advisory: analysis.advisory,
     integrity: { algorithm: 'sha256', digest: '', attestation: null },

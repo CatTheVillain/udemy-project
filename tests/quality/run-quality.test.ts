@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, resolve } from 'node:path';
+import { delimiter, dirname, isAbsolute, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   analyseSourceText,
@@ -79,7 +79,13 @@ interface QualityReportFixture {
   findings: [];
   suppressions: [];
   limitations: string[];
-  advisory: { complexitySignals: [] };
+  advisory: {
+    complexitySignals: [];
+    complexityReview: {
+      basis: 'independent-responsibilities';
+      guidance: string;
+    };
+  };
   integrity: {
     algorithm: 'sha256';
     digest: string;
@@ -612,7 +618,7 @@ function validReport(
       stylelint: '16',
       eslint: '8',
     },
-    configVersions: { reportSchema: REPORT_SCHEMA_VERSION, staticRules: 1 },
+    configVersions: { reportSchema: REPORT_SCHEMA_VERSION, staticRules: 2 },
     context: {
       execution: 'local',
       scope: 'full',
@@ -636,7 +642,13 @@ function validReport(
     findings: [],
     suppressions: [],
     limitations: ['Report evidence remains an entry predicate, not a Review verdict.'],
-    advisory: { complexitySignals: [] },
+    advisory: {
+      complexitySignals: [],
+      complexityReview: {
+        basis: 'independent-responsibilities',
+        guidance: 'Fixture preserves the required responsibility review contract.',
+      },
+    },
     integrity: { algorithm: 'sha256', digest: '', attestation: null },
   };
   sealReport(report);
@@ -670,6 +682,191 @@ function validCiReport(sha: string, ciRun?: CiRunIdentity) {
   };
   report.integrity.digest = reportDigest(report);
   return report;
+}
+
+interface HookTraceCall {
+  command: string;
+  args: string[];
+}
+
+interface Stage0HookFixture {
+  directory: string;
+  repository: string;
+  trace: string;
+  preload: string;
+}
+
+function fixtureEnvironment(environment: NodeJS.ProcessEnv = process.env) {
+  const withoutInheritedIndex = { ...environment };
+  delete withoutInheritedIndex.GIT_INDEX_FILE;
+  return withoutInheritedIndex;
+}
+
+function gitFixture(repository: string, args: string[], options: Record<string, unknown> = {}) {
+  const result = spawnSync('git', args, {
+    cwd: repository,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 64 * 1024 * 1024,
+    env: fixtureEnvironment(),
+    ...options,
+  });
+  expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+  return result;
+}
+
+function selectedHookIndex() {
+  if (process.env.GIT_INDEX_FILE)
+    return isAbsolute(process.env.GIT_INDEX_FILE)
+      ? process.env.GIT_INDEX_FILE
+      : resolve('.', process.env.GIT_INDEX_FILE);
+  const indexPath = spawnSync('git', ['rev-parse', '--git-path', 'index'], {
+    encoding: 'utf8',
+    env: fixtureEnvironment(),
+    shell: false,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  expect(indexPath.status, indexPath.stderr).toBe(0);
+  return resolve(indexPath.stdout.trim());
+}
+
+async function trackedHookBytes(repository: string) {
+  const hash = createHash('sha256');
+  const tracked = gitFixture(repository, ['ls-files', '-z']).stdout.split('\0').filter(Boolean);
+  for (const path of tracked) {
+    hash
+      .update(path)
+      .update('\0')
+      .update(await readFile(resolve(repository, path)));
+  }
+  return hash.digest('hex');
+}
+
+async function privateHookTree(repository: string) {
+  const directory = await mkdtemp(resolve(tmpdir(), 'quality-index-guard-'));
+  const privateIndex = resolve(directory, 'index');
+  try {
+    await copyFile(resolve(repository, '.git/index'), privateIndex);
+    return gitFixture(repository, ['write-tree'], {
+      env: { ...fixtureEnvironment(), GIT_INDEX_FILE: privateIndex },
+    }).stdout.trim();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function protectedHookState(repository: string) {
+  return {
+    index: await readFile(resolve(repository, '.git/index')),
+    tree: await privateHookTree(repository),
+    tracked: await trackedHookBytes(repository),
+    stash: gitFixture(repository, ['stash', 'list']).stdout,
+  };
+}
+
+async function expectProtectedHookState(
+  repository: string,
+  before: Awaited<ReturnType<typeof protectedHookState>>,
+) {
+  const after = await protectedHookState(repository);
+  expect(Buffer.compare(after.index, before.index)).toBe(0);
+  expect({ ...after, index: undefined }).toEqual({ ...before, index: undefined });
+}
+
+async function stage0HookFixture(): Promise<Stage0HookFixture> {
+  const directory = await mkdtemp(resolve(tmpdir(), 'quality-stage-fixture-'));
+  temporaryPaths.push(directory);
+  const privateIndex = resolve(directory, 'stage0.index');
+  const source = resolve(directory, 'source');
+  const archive = resolve(directory, 'stage0.tar');
+  const repository = resolve(directory, 'repository');
+  await copyFile(selectedHookIndex(), privateIndex);
+  const environment = { ...fixtureEnvironment(), GIT_INDEX_FILE: privateIndex };
+  const tree = spawnSync('git', ['write-tree'], {
+    encoding: 'utf8',
+    env: environment,
+    shell: false,
+  });
+  expect(tree.status, tree.stderr).toBe(0);
+  const archiveResult = spawnSync('git', ['archive', '--format=tar', tree.stdout.trim()], {
+    encoding: 'buffer',
+    env: environment,
+    shell: false,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  expect(archiveResult.status, archiveResult.stderr.toString()).toBe(0);
+  await mkdir(source);
+  await writeFile(archive, archiveResult.stdout);
+  const unpack = spawnSync('tar', ['-xf', archive, '-C', source], {
+    encoding: 'utf8',
+    shell: false,
+  });
+  expect(unpack.status, `${unpack.stdout}\n${unpack.stderr}`).toBe(0);
+  await rm(archive);
+  await rm(privateIndex);
+  gitFixture(source, ['init']);
+  gitFixture(source, ['add', '-A']);
+  gitFixture(source, [
+    '-c',
+    'user.email=quality@example.test',
+    '-c',
+    'user.name=Quality Test',
+    'commit',
+    '-m',
+    'stage-zero fixture',
+  ]);
+  gitFixture(resolve('.'), ['clone', '--no-hardlinks', '--quiet', source, repository]);
+  await symlink(
+    resolve('node_modules'),
+    resolve(repository, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
+  const preload = resolve(directory, 'child-process-trace.cjs');
+  const trace = resolve(directory, 'child-process-trace.jsonl');
+  await writeFile(
+    preload,
+    "const child = require('node:child_process');\nconst { appendFileSync } = require('node:fs');\nconst original = child.spawnSync;\nchild.spawnSync = function tracedSpawnSync(command, args, options) {\n  appendFileSync(process.env.QUALITY_HOOK_TRACE, JSON.stringify({ command: String(command), args: Array.isArray(args) ? args.map(String) : [], cwd: options?.cwd ?? process.cwd() }) + '\\n');\n  return original.apply(this, arguments);\n};\n",
+  );
+  return { directory, repository, trace, preload };
+}
+
+function runStage0Hook(fixture: Stage0HookFixture) {
+  return spawnSync(process.execPath, ['scripts/quality/run-staged-quality.mjs'], {
+    cwd: fixture.repository,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 64 * 1024 * 1024,
+    env: {
+      ...fixtureEnvironment(),
+      NODE_OPTIONS: [
+        ...(process.env.NODE_OPTIONS ? [process.env.NODE_OPTIONS] : []),
+        `--require=${fixture.preload}`,
+      ].join(' '),
+      QUALITY_HOOK_TRACE: fixture.trace,
+    },
+  });
+}
+
+async function hookTrace(path: string): Promise<HookTraceCall[]> {
+  if (!existsSync(path)) return [];
+  return (await readFile(path, 'utf8'))
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as HookTraceCall);
+}
+
+function commandIndex(calls: HookTraceCall[], suffix: string) {
+  return calls.findIndex(({ args }) =>
+    args.some((argument) => argument.replace(/\\/g, '/').endsWith(suffix)),
+  );
+}
+
+function fullCheckerCalls(calls: HookTraceCall[]) {
+  return calls.filter(({ args }) =>
+    args.some((argument) =>
+      argument.replace(/\\/g, '/').endsWith('check-full-staged-snapshot.mjs'),
+    ),
+  );
 }
 
 function hasOrderedSteps(source: string, steps: readonly string[]) {
@@ -1736,162 +1933,48 @@ describe('staged and CI decision simulations', () => {
     );
   });
 
-  it('formats only the selected staged files through the real pre-commit hook without changing the live index', async () => {
-    const liveIndexPath = spawnSync('git', ['rev-parse', '--git-path', 'index'], {
-      encoding: 'utf8',
-    });
-    expect(liveIndexPath.status, liveIndexPath.stderr).toBe(0);
-    const liveIndex = resolve(liveIndexPath.stdout.trim());
-    const before = await readFile(liveIndex);
-    const directory = await mkdtemp(resolve(tmpdir(), 'mai002-hook-index-'));
+  it('preserves LF text conversion and binary bytes under the repository attributes', async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), 'quality-attributes-'));
     temporaryPaths.push(directory);
     const repository = resolve(directory, 'repository');
-    await mkdir(resolve(repository, '.husky'), { recursive: true });
-    await mkdir(resolve(repository, 'scripts/quality'), { recursive: true });
+    await mkdir(repository);
     await Promise.all([
-      copyFile(resolve('.eslintrc.cjs'), resolve(repository, '.eslintrc.cjs')),
-      copyFile(resolve('package.json'), resolve(repository, 'package.json')),
-      copyFile(resolve('.prettierrc.json'), resolve(repository, '.prettierrc.json')),
-      copyFile(resolve('stylelint.config.cjs'), resolve(repository, 'stylelint.config.cjs')),
-      copyFile(resolve('.husky/pre-commit'), resolve(repository, '.husky/pre-commit')),
-      copyFile(
-        resolve('scripts/quality/run-staged-quality.mjs'),
-        resolve(repository, 'scripts/quality/run-staged-quality.mjs'),
-      ),
-      copyFile(
-        resolve('scripts/quality/quality-decisions.mjs'),
-        resolve(repository, 'scripts/quality/quality-decisions.mjs'),
-      ),
+      copyFile(resolve('.gitattributes'), resolve(repository, '.gitattributes')),
+      writeFile(resolve(repository, 'text.json'), '{\r\n  "fixture": true\r\n}\r\n'),
+      writeFile(resolve(repository, 'fixture.png'), Uint8Array.from([0, 255, 13, 10, 26, 10])),
     ]);
-    const fixtureBinary = Uint8Array.from([0, 255, 13, 10, 26, 10]);
-    await writeFile(resolve(repository, 'fixture.png'), fixtureBinary);
-    const initialPackage = JSON.parse(await readFile(resolve(repository, 'package.json'), 'utf8'));
-    initialPackage.scripts['precommit:staged'] = 'lint-staged --config lint-staged.config.mjs';
-    await Promise.all([
-      writeFile(
-        resolve(repository, 'package.json'),
-        `${JSON.stringify(initialPackage, null, 2)}\n`,
-      ),
-      writeFile(
-        resolve(repository, 'lint-staged.config.mjs'),
-        "export default { '*.json': 'prettier --write', '*.cjs': 'eslint' };\n",
-      ),
+    gitFixture(repository, ['init']);
+    gitFixture(repository, ['add', '.']);
+    gitFixture(repository, [
+      '-c',
+      'user.email=quality@example.test',
+      '-c',
+      'user.name=Quality Test',
+      'commit',
+      '-m',
+      'attributes',
     ]);
-    await symlink(
-      resolve('node_modules'),
-      resolve(repository, 'node_modules'),
-      process.platform === 'win32' ? 'junction' : 'dir',
-    );
-    const initialize = spawnSync('git', ['init'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(initialize.status, initialize.stderr).toBe(0);
-    const initialAdd = spawnSync(
-      'git',
-      [
-        'add',
-        '.eslintrc.cjs',
-        'package.json',
-        '.prettierrc.json',
-        'lint-staged.config.mjs',
-        'stylelint.config.cjs',
-        'fixture.png',
-        '.husky',
-        'scripts',
-      ],
-      {
-        cwd: repository,
-        encoding: 'utf8',
-      },
-    );
-    expect(initialAdd.status, initialAdd.stderr).toBe(0);
-    const initialCommit = spawnSync(
-      'git',
-      [
-        '-c',
-        'user.email=quality@example.test',
-        '-c',
-        'user.name=Quality Test',
-        'commit',
-        '-m',
-        'fixture',
-      ],
-      { cwd: repository, encoding: 'utf8' },
-    );
-    expect(initialCommit.status, initialCommit.stderr).toBe(0);
-
-    const enableAutocrlf = spawnSync('git', ['config', 'core.autocrlf', 'true'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(enableAutocrlf.status, enableAutocrlf.stderr).toBe(0);
-    await rm(resolve(repository, 'package.json'));
-    const redCheckout = spawnSync('git', ['checkout', '--', 'package.json'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(redCheckout.status, redCheckout.stderr).toBe(0);
-    expect(await readFile(resolve(repository, 'package.json'), 'utf8')).toContain('\r\n');
-    const prettier = resolve('node_modules/prettier/bin/prettier.cjs');
-    const redPrettier = spawnSync(process.execPath, [prettier, '--check', 'package.json'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(redPrettier.status).not.toBe(0);
-
-    await copyFile(resolve('.gitattributes'), resolve(repository, '.gitattributes'));
-    const addAttributes = spawnSync('git', ['add', '--', '.gitattributes'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(addAttributes.status, addAttributes.stderr).toBe(0);
-    const commitAttributes = spawnSync(
-      'git',
-      [
-        '-c',
-        'user.email=quality@example.test',
-        '-c',
-        'user.name=Quality Test',
-        'commit',
-        '-m',
-        'fixture attributes',
-      ],
-      { cwd: repository, encoding: 'utf8' },
-    );
-    expect(commitAttributes.status, commitAttributes.stderr).toBe(0);
-    await rm(resolve(repository, 'package.json'));
+    gitFixture(repository, ['config', 'core.autocrlf', 'true']);
+    await rm(resolve(repository, 'text.json'));
     await rm(resolve(repository, 'fixture.png'));
-    const greenCheckout = spawnSync('git', ['checkout', '--', 'package.json', 'fixture.png'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(greenCheckout.status, greenCheckout.stderr).toBe(0);
-    expect(await readFile(resolve(repository, 'package.json'), 'utf8')).not.toContain('\r');
-    expect([...(await readFile(resolve(repository, 'fixture.png')))]).toEqual([...fixtureBinary]);
-    const greenPrettier = spawnSync(process.execPath, [prettier, '--check', 'package.json'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(greenPrettier.status, `${greenPrettier.stdout}\n${greenPrettier.stderr}`).toBe(0);
-    const attributes = spawnSync(
-      'git',
-      [
-        'check-attr',
-        'text',
-        'eol',
-        '--',
-        'package.json',
-        'stylelint.config.cjs',
-        'scripts/quality/run-staged-quality.mjs',
-        'tests/quality/run-quality.test.ts',
-        '.github/workflows/frontend-quality.yml',
-        '.husky/pre-commit',
-        'fixture.png',
-      ],
-      { cwd: repository, encoding: 'utf8' },
-    );
-    expect(attributes.status, attributes.stderr).toBe(0);
+    gitFixture(repository, ['checkout', '--', 'text.json', 'fixture.png']);
+    expect(await readFile(resolve(repository, 'text.json'), 'utf8')).not.toContain('\r');
+    expect([...(await readFile(resolve(repository, 'fixture.png')))]).toEqual([
+      0, 255, 13, 10, 26, 10,
+    ]);
+    const attributes = gitFixture(repository, [
+      'check-attr',
+      'text',
+      'eol',
+      '--',
+      'package.json',
+      'stylelint.config.cjs',
+      'scripts/quality/run-staged-quality.mjs',
+      'tests/quality/run-quality.test.ts',
+      '.github/workflows/frontend-quality.yml',
+      '.husky/pre-commit',
+      'fixture.png',
+    ]);
     expect(attributes.stdout).toContain('package.json: text: auto');
     expect(attributes.stdout).toContain('package.json: eol: lf');
     expect(attributes.stdout).toContain('stylelint.config.cjs: eol: lf');
@@ -1901,55 +1984,117 @@ describe('staged and CI decision simulations', () => {
     expect(attributes.stdout).toContain('.husky/pre-commit: eol: lf');
     expect(attributes.stdout).toContain('fixture.png: text: auto');
     expect(attributes.stdout).not.toContain('fixture.png: text: set');
-
-    const fixturePackage = JSON.parse(await readFile(resolve(repository, 'package.json'), 'utf8'));
-    fixturePackage.hookFixture = true;
-    const unrelatedPath = resolve(repository, 'unrelated.txt');
-    const unrelatedContent = 'unstaged fixture content\r\n';
-    await writeFile(unrelatedPath, unrelatedContent);
-    const nonCanonicalPackage = `${JSON.stringify(fixturePackage)}\r\n`;
-    await writeFile(resolve(repository, 'package.json'), nonCanonicalPackage);
-    await writeFile(
-      resolve(repository, 'stylelint.config.cjs'),
-      `${await readFile(resolve(repository, 'stylelint.config.cjs'), 'utf8')}\n`,
-    );
-    const updateIndex = spawnSync('git', ['add', '--', 'package.json', 'stylelint.config.cjs'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(updateIndex.status, updateIndex.stderr).toBe(0);
-    const stagedPaths = spawnSync('git', ['diff', '--cached', '--name-only'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(stagedPaths.status, stagedPaths.stderr).toBe(0);
-    expect(stagedPaths.stdout.split(/\r?\n/)).toContain('package.json');
-    expect(stagedPaths.stdout.split(/\r?\n/)).toContain('stylelint.config.cjs');
-
-    const hook = spawnSync(resolveGitBash(), ['-x', '.husky/pre-commit'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(hook.status, `${hook.stdout}\n${hook.stderr}`).toBe(0);
-    const stagedBlob = spawnSync('git', ['show', ':package.json'], {
-      cwd: repository,
-      encoding: 'utf8',
-    });
-    expect(stagedBlob.status, stagedBlob.stderr).toBe(0);
-    expect(stagedBlob.stdout).not.toContain('\r');
-    expect(stagedBlob.stdout).not.toBe(nonCanonicalPackage);
-    expect(await readFile(resolve(repository, 'package.json'), 'utf8')).not.toContain('\r');
-    expect(await readFile(unrelatedPath, 'utf8')).toBe(unrelatedContent);
-    await writeFile(resolve(repository, 'invalid.cjs'), 'module.exports = unknownFixture;\n');
-    const invalidCjs = spawnSync(
-      process.execPath,
-      [resolve('node_modules/eslint/bin/eslint.js'), 'invalid.cjs', '--max-warnings', '0'],
-      { cwd: repository, encoding: 'utf8' },
-    );
-    expect(invalidCjs.status).not.toBe(0);
-    expect(`${invalidCjs.stdout}\n${invalidCjs.stderr}`).toContain('no-undef');
-    expect(await readFile(liveIndex)).toEqual(before);
   }, 30_000);
+
+  it('runs the authenticated full checker once for an empty staged change set', async () => {
+    const fixture = await stage0HookFixture();
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.some(({ command }) => command === 'git')).toBe(true);
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(result.stdout).toContain('QUALITY_STAGE0_AUTHENTICATED');
+    expect(result.stdout).toContain('QUALITY_SNAPSHOT_AUTHENTICATED');
+    expect(result.stdout).toContain('QUALITY_FULL_CHECK_PASS');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
+
+  it('checks the staged projection while ignoring divergent unstaged bytes and runs predicates before one full checker', async () => {
+    const fixture = await stage0HookFixture();
+    const stagedPath = resolve(fixture.repository, 'tests/quality/hook-oracle.mjs');
+    const stagedStyle = resolve(fixture.repository, 'src/hook-oracle.css');
+    await writeFile(stagedPath, 'export const stageZeroControl = true;\n');
+    await writeFile(stagedStyle, ':root {\n  --quality-hook-oracle: #fff;\n}\n');
+    gitFixture(fixture.repository, [
+      'add',
+      '--',
+      'tests/quality/hook-oracle.mjs',
+      'src/hook-oracle.css',
+    ]);
+    await writeFile(stagedPath, 'export const stageZeroControl = ;\n');
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+    const prettier = commandIndex(calls, 'prettier.cjs');
+    const eslint = commandIndex(calls, 'eslint.js');
+    const stylelint = commandIndex(calls, 'stylelint.mjs');
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(prettier).toBeGreaterThanOrEqual(0);
+    expect(eslint).toBeGreaterThan(prettier);
+    expect(stylelint).toBeGreaterThan(eslint);
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(commandIndex(calls, 'check-full-staged-snapshot.mjs')).toBeGreaterThan(stylelint);
+    expect(result.stdout).toContain('QUALITY_FULL_CHECK_PASS');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
+
+  it('stops after a failed predicate without writing protected state or invoking the full checker', async () => {
+    const fixture = await stage0HookFixture();
+    const stagedPath = resolve(fixture.repository, 'tests/quality/hook-oracle.mjs');
+    await writeFile(stagedPath, "export const stageZeroFailure = 'unterminated;\n");
+    gitFixture(fixture.repository, ['add', '--', 'tests/quality/hook-oracle.mjs']);
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Prettier check failed.');
+    expect(calls.length).toBeGreaterThan(0);
+    expect(commandIndex(calls, 'prettier.cjs')).toBeGreaterThanOrEqual(0);
+    expect(fullCheckerCalls(calls)).toHaveLength(0);
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
+
+  it('propagates a real authenticated full-checker failure after successful predicates', async () => {
+    const fixture = await stage0HookFixture();
+    const stagedPath = resolve(fixture.repository, 'src/hook-oracle.ts');
+    await writeFile(
+      stagedPath,
+      "interface StageZeroSource {\n  value: string;\n}\n\nexport type StageZeroProjection = StageZeroSource['value'];\n",
+    );
+    gitFixture(fixture.repository, ['add', '--', 'src/hook-oracle.ts']);
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+    const prettier = commandIndex(calls, 'prettier.cjs');
+    const eslint = commandIndex(calls, 'eslint.js');
+
+    expect(result.status).not.toBe(0);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(prettier).toBeGreaterThanOrEqual(0);
+    expect(eslint).toBeGreaterThan(prettier);
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(commandIndex(calls, 'check-full-staged-snapshot.mjs')).toBeGreaterThan(eslint);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Authenticated full checker failed.');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
+
+  it('keeps the pre-commit route check-only and binds the authenticated full checker after predicates', async () => {
+    const [hook, runner, packageJson] = await Promise.all([
+      readFile(resolve('.husky/pre-commit'), 'utf8'),
+      readFile(resolve('scripts/quality/run-staged-quality.mjs'), 'utf8'),
+      readFile(resolve('package.json'), 'utf8'),
+    ]);
+    expect(hook.trimEnd().split(/\r?\n/)).toEqual([
+      '#!/usr/bin/env sh',
+      'node scripts/quality/run-staged-quality.mjs',
+    ]);
+    expect(runner).toContain("'--check'");
+    expect(runner).toContain('stagedPredicatePlan');
+    expect(runner).toContain('check-full-staged-snapshot.mjs');
+    expect(runner).not.toContain('--write');
+    expect(runner).not.toContain('lint-staged');
+    expect(runner).not.toContain("'add'");
+    expect(
+      hasOrderedSteps(runner, ['prettier', 'eslint', 'stylelint', 'check-full-staged-snapshot']),
+    ).toBe(true);
+    const parsed = JSON.parse(packageJson) as { scripts: Record<string, string> };
+    expect(parsed.scripts['precommit:staged']).toBe('lint-staged');
+  });
 
   it('models staged clean, fail, non-target, and bypass semantics without touching the index', () => {
     expect(

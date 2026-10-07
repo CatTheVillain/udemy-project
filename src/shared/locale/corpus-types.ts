@@ -25,6 +25,10 @@ export interface SourceRevision {
   readonly value: string;
 }
 
+export interface LocalizationSourceHash {
+  readonly sha256: string;
+}
+
 export interface RetirementProvenance {
   readonly reason: string;
   readonly sourceRevision: string;
@@ -388,7 +392,7 @@ export interface CorpusMigrationProvenance {
 export interface LocalizationCorpus {
   readonly formatVersion: 1;
   readonly corpusVersion: LocalizationCorpusVersion;
-  readonly source: { readonly sha256: string };
+  readonly source: LocalizationSourceHash;
   readonly consumerGrammar: LocalizationConsumerGrammar;
   readonly baselineResources: BaselineLocaleResources;
   readonly summary: LocalizationCorpusSummary;

@@ -4,29 +4,33 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const exactAdapterExceptions = new Map([
-  [
-    'src/features/auth-session/operation-adapter.ts',
-    {
-      alias: 'SessionOperationRequester',
-      projection: 'SessionContextValue.requestPublic',
-    },
-  ],
-  [
-    'src/features/catalog-discovery/api.ts',
-    {
-      alias: 'CatalogRequester',
-      projection: 'ApiClient.request',
-    },
-  ],
-]);
+const exactProjectionExceptions = [
+  {
+    path: 'src/features/auth-session/operation-adapter.ts',
+    symbol: 'SessionOperationRequester',
+    projection: 'SessionContextValue.requestPublic',
+    reason: 'Exact compatibility adapter tracks SessionContextValue.requestPublic.',
+  },
+  {
+    path: 'src/features/catalog-discovery/api.ts',
+    symbol: 'CatalogRequester',
+    projection: 'ApiClient.request',
+    reason: 'Exact compatibility adapter tracks ApiClient.request.',
+  },
+  {
+    path: 'src/app/layouts/catalog-header-search-controller.ts',
+    symbol: 'location',
+    projection: 'CatalogHeaderSearchProps.location',
+    reason: 'The helper consumes the named route-location contract without recreating it.',
+  },
+];
 
 export function staticSuppressions() {
-  return [...exactAdapterExceptions.entries()].map(([path, exception]) => ({
+  return exactProjectionExceptions.map(({ path, symbol, reason }) => ({
     ruleId: 'TS-TYPE-002',
     path,
-    owner: exception.alias,
-    rationale: `Exact compatibility adapter tracks ${exception.projection}.`,
+    symbol,
+    reason,
   }));
 }
 
@@ -42,8 +46,8 @@ async function sourceFiles(directory) {
   return nested.flat();
 }
 
-function relativeFile(file) {
-  const fromRoot = relative(root, file).replace(/\\/g, '/');
+function relativeFile(file, sourceRoot = root) {
+  const fromRoot = relative(sourceRoot, file).replace(/\\/g, '/');
   return fromRoot.startsWith('..') ? file.replace(/\\/g, '/') : fromRoot;
 }
 
@@ -69,23 +73,82 @@ function namedProjection(typeNode) {
   return `${typeNode.objectType.typeName.getText()}.${typeNode.indexType.literal.text}`;
 }
 
-function isExactAdapter(file, alias, projection, content) {
-  const configured = exactAdapterExceptions.get(file);
-  if (configured?.alias === alias && configured.projection === projection) return true;
-  const fixtureException = new RegExp(
-    `quality-exception:\\s*TS-TYPE-002\\s+${alias}\\s+${projection.replace('.', '\\.')}\\s+exact compatibility adapter`,
-  );
-  return fixtureException.test(content);
+function nodeSymbol(node) {
+  for (let current = node; current; current = current.parent) {
+    if (
+      (ts.isTypeAliasDeclaration(current) ||
+        ts.isInterfaceDeclaration(current) ||
+        ts.isFunctionDeclaration(current) ||
+        ts.isClassDeclaration(current)) &&
+      current.name
+    )
+      return current.name.text;
+    if (ts.isVariableDeclaration(current)) {
+      if (ts.isIdentifier(current.name)) return current.name.text;
+      if (ts.isArrayBindingPattern(current.name)) {
+        const binding = current.name.elements.find(
+          (element) => ts.isBindingElement(element) && ts.isIdentifier(element.name),
+        );
+        if (binding && ts.isIdentifier(binding.name)) return binding.name.text;
+      }
+    }
+    if (ts.isParameter(current) && ts.isIdentifier(current.name)) return current.name.text;
+    if (
+      (ts.isPropertySignature(current) || ts.isPropertyDeclaration(current)) &&
+      current.name &&
+      (ts.isIdentifier(current.name) || ts.isStringLiteral(current.name))
+    )
+      return current.name.text;
+  }
+  return undefined;
 }
 
-export function analyseSourceText(file, content) {
-  const normalizedFile = relativeFile(file);
+function hasExactSuppressionComment(sourceFile, node, symbol) {
+  const marker = `quality-exception: TS-TYPE-002 ${symbol} `;
+  for (let current = node; current; current = current.parent) {
+    const comments = ts.getLeadingCommentRanges(sourceFile.text, current.getFullStart()) ?? [];
+    if (
+      comments.some(({ pos, end }) => {
+        const comment = sourceFile.text
+          .slice(pos, end)
+          .replace(/^\/\/\s?/, '')
+          .trim();
+        const gap = sourceFile.text.slice(end, current.getStart(sourceFile));
+        return comment.startsWith(marker) && !/\r?\n[ \t]*\r?\n/.test(gap);
+      })
+    )
+      return true;
+  }
+  return false;
+}
+
+function isExactAdapter(file, symbol, projection, sourceFile, node) {
+  if (
+    exactProjectionExceptions.some(
+      (exception) =>
+        exception.path === file &&
+        exception.symbol === symbol &&
+        exception.projection === projection,
+    )
+  )
+    return true;
+  return hasExactSuppressionComment(sourceFile, node, symbol);
+}
+
+export function analyseSourceText(file, content, sourceRoot = root) {
+  const normalizedFile = relativeFile(file, sourceRoot);
   const sourceFile = ts.createSourceFile(normalizedFile, content, ts.ScriptTarget.Latest, true);
   const findings = [];
   function visit(node) {
-    if (ts.isTypeAliasDeclaration(node)) {
-      const projection = namedProjection(node.type);
-      if (projection && !isExactAdapter(normalizedFile, node.name.text, projection, content)) {
+    if (ts.isIndexedAccessTypeNode(node)) {
+      const projection = namedProjection(node);
+      const symbol = nodeSymbol(node);
+      if (
+        projection &&
+        symbol &&
+        !ts.findAncestor(node, ts.isInterfaceDeclaration) &&
+        !isExactAdapter(normalizedFile, symbol, projection, sourceFile, node)
+      ) {
         findings.push(
           finding(
             normalizedFile,
@@ -140,9 +203,9 @@ function moduleEdges(file, content, sourceFilesByPath) {
   return edges;
 }
 
-export function collectImportCycleFindings(entries) {
+export function collectImportCycleFindings(entries, sourceRoot = root) {
   const sourceFilesByPath = new Map(
-    entries.map(({ file, content }) => [relativeFile(file), content]),
+    entries.map(({ file, content }) => [relativeFile(file, sourceRoot), content]),
   );
   const edges = new Map(
     [...sourceFilesByPath].map(([file, content]) => [
@@ -177,14 +240,17 @@ export function collectImportCycleFindings(entries) {
   return findings;
 }
 
-export async function collectStaticFindings(directory = resolve(root, 'src')) {
+export async function collectStaticFindings(
+  directory = resolve(root, 'src'),
+  sourceRoot = resolve(directory, '..'),
+) {
   const files = await sourceFiles(directory);
   const entries = await Promise.all(
     files.map(async (file) => ({ file, content: await readFile(file, 'utf8') })),
   );
   return [
-    ...entries.flatMap(({ file, content }) => analyseSourceText(file, content)),
-    ...collectImportCycleFindings(entries),
+    ...entries.flatMap(({ file, content }) => analyseSourceText(file, content, sourceRoot)),
+    ...collectImportCycleFindings(entries, sourceRoot),
   ];
 }
 
@@ -208,6 +274,12 @@ export function complexitySignals(content) {
     signals.push({ branches, effects, jsxBranches, ruleId: 'REACT-COMP-001' });
   return signals;
 }
+
+export const complexityReview = Object.freeze({
+  basis: 'independent-responsibilities',
+  guidance:
+    'Review flagged modules for independent responsibilities and record a retain or split decision; file length alone is not a defect.',
+});
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const findings = await collectStaticFindings();
