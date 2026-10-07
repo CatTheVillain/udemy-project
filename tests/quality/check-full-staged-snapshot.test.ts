@@ -105,6 +105,9 @@ async function fixture() {
   temporary.push(directory);
   const repository = resolve(directory, 'repository');
   git(root, ['clone', '--no-hardlinks', '--quiet', source, repository]);
+  await writeFile(resolve(repository, '.git', 'info', 'exclude'), '\n/node_modules\n', {
+    flag: 'a',
+  });
   await symlink(
     resolve(root, 'node_modules'),
     resolve(repository, 'node_modules'),

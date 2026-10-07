@@ -373,17 +373,13 @@ export function SessionProvider({
             generationRef.current !== generation
           )
             break;
-          if (
-            recoveredReplacement ||
-            !(error instanceof ApiError) ||
-            error.status !== 401 ||
-            !token
-          )
-            throw error;
-          if (!clearSessionForSnapshot(generation, token)) throw error;
-          return client.request<TResponse, TBody>(
-            forSessionGeneration({ ...options, authPolicy: 'public' }, generationRef.current),
-          );
+          if (error instanceof ApiError && error.status === 401 && token) {
+            if (!clearSessionForSnapshot(generation, token)) throw error;
+            return client.request<TResponse, TBody>(
+              forSessionGeneration({ ...options, authPolicy: 'public' }, generationRef.current),
+            );
+          }
+          throw error;
         }
 
         recoveredReplacement = true;

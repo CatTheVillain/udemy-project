@@ -133,15 +133,10 @@ function safeFilename(contentDisposition: string | null): string | undefined {
   return basename && basename !== '.' && basename !== '..' ? basename : undefined;
 }
 
-async function parseSuccess<TResponse>(
-  response: Response,
-  responseType: ApiResponseType,
-  decode?: (value: unknown) => TResponse,
-): Promise<TResponse> {
+async function parseSuccess(response: Response, responseType: ApiResponseType): Promise<unknown> {
   if (response.status === 204) {
     await response.text();
-    if (responseType === 'json' && decode) return decode(undefined);
-    return undefined as TResponse;
+    return undefined;
   }
 
   if (responseType === 'blob') {
@@ -153,11 +148,10 @@ async function parseSuccess<TResponse>(
       contentDisposition,
       filename: safeFilename(contentDisposition),
     };
-    return binaryResponse as TResponse;
+    return binaryResponse;
   }
 
-  const value: unknown = await response.json();
-  return decode ? decode(value) : (value as TResponse);
+  return response.json();
 }
 
 export function createApiClient(config: ApiClientConfig = {}): ApiClient {
@@ -237,13 +231,27 @@ export function createApiClient(config: ApiClientConfig = {}): ApiClient {
           throw apiError;
         }
 
+        let value: unknown;
+        try {
+          value = await parseSuccess(response, options.responseType ?? 'json');
+        } catch (error) {
+          throw new ApiError({
+            kind: 'invalid_response',
+            status: response.status,
+            message: 'Server returned an invalid success response',
+            cause: error,
+          });
+        }
+        assertRequestIdentity(identity);
         let parsed: TResponse;
         try {
-          parsed = await parseSuccess<TResponse>(
-            response,
-            options.responseType ?? 'json',
-            responseDecoder(options),
-          );
+          const decode = responseDecoder(options);
+          parsed =
+            options.responseType === 'blob'
+              ? (value as TResponse)
+              : decode
+                ? decode(value)
+                : (value as TResponse);
         } catch (error) {
           throw new ApiError({
             kind: 'invalid_response',

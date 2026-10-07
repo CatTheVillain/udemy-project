@@ -12,6 +12,7 @@ import {
   useSession,
   type AccessTokenStore,
 } from '../../../src/features/auth-session';
+import { requestLessonOutline } from '../../../src/features/course-detail/api';
 import type { UserProfileDto } from '../../../src/entities/user';
 import { cancelAndRemovePrivateQueries } from '../../../src/app/query/SessionPrivateCacheLifecycle';
 import {
@@ -513,6 +514,33 @@ function RequestHarness({
   );
 }
 
+function LessonOutlineHarness() {
+  const session = useSession();
+  const [result, setResult] = useState('idle');
+  return (
+    <div>
+      <output aria-label="session status">{session.state.status}</output>
+      <output aria-label="outline result">{result}</output>
+      <button type="button" onClick={() => session.acceptAccessToken('newer-token')}>
+        Accept newer token
+      </button>
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            const outline = await requestLessonOutline(session, 7, new AbortController().signal);
+            setResult(outline.items.length === 1 ? 'success' : 'unexpected');
+          } catch {
+            setResult('failed');
+          }
+        }}
+      >
+        Load outline
+      </button>
+    </div>
+  );
+}
+
 function OverlappingRequestHarness() {
   const { acceptAccessToken, requestRequired, state } = useSession();
   const [olderResult, setOlderResult] = useState('idle');
@@ -966,5 +994,155 @@ describe('session-aware requests', () => {
     expect(courseAttempts).toBe(2);
     expect(courseAuthorization).toEqual(['Bearer invalid-on-optional', null]);
     expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('recovers a replaced lesson-outline read without retaining the stale decoder state', async () => {
+    const store = tokenStore('older-token');
+    const oldOutline = deferred<Response>();
+    const outlineCalls: Array<string | null> = [];
+    const fetchImplementation: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const authorization = new Headers(init?.headers).get('Authorization');
+      if (url.endsWith('/me')) {
+        return new Response(JSON.stringify(profile), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      outlineCalls.push(authorization);
+      if (outlineCalls.length === 1) return oldOutline.promise;
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: 1,
+              title: 'Lesson 1',
+              lesson_type: 'video',
+              download_url: '/media/lessons/1.mp4',
+              description: null,
+              is_published: true,
+              created_at: '2026-07-01T00:00:00Z',
+              updated_at: '2026-07-01T00:00:00Z',
+            },
+          ],
+          page: 1,
+          page_size: 100,
+          total: 1,
+          pages: 1,
+          has_next: false,
+          has_previous: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+    render(
+      <SessionProvider
+        apiBaseUrl="https://api.learnhub.test"
+        fetchImplementation={fetchImplementation}
+        tokenStore={store}
+      >
+        <LessonOutlineHarness />
+      </SessionProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Load outline' })));
+    await waitFor(() => expect(outlineCalls).toEqual(['Bearer older-token']));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    await act(async () =>
+      oldOutline.resolve(
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 1,
+                title: 'Lesson 1',
+                lesson_type: 'video',
+                download_url: '/media/lessons/1.mp4',
+                description: null,
+                is_published: true,
+                created_at: '2026-07-01T00:00:00Z',
+                updated_at: '2026-07-01T00:00:00Z',
+              },
+            ],
+            page: 1,
+            page_size: 100,
+            total: 1,
+            pages: 1,
+            has_next: false,
+            has_previous: false,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('outline result').textContent).toBe('success'),
+    );
+    expect(outlineCalls).toEqual(['Bearer older-token', 'Bearer newer-token']);
+    expect(store.value).toBe('newer-token');
+  });
+
+  it('clears a replacement token after its recovered optional GET receives 401, then retries publicly', async () => {
+    const store = tokenStore('older-token');
+    const firstResponse = deferred<Response>();
+    const authorizations: Array<string | null> = [];
+    const fetchImplementation: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const authorization = new Headers(init?.headers).get('Authorization');
+      if (url.endsWith('/me')) {
+        return new Response(JSON.stringify(profile), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      authorizations.push(authorization);
+      if (authorizations.length === 1) return firstResponse.promise;
+      if (authorizations.length === 2) {
+        return new Response(JSON.stringify({ detail: 'Expired replacement token' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+    render(
+      <SessionProvider
+        apiBaseUrl="https://api.learnhub.test"
+        fetchImplementation={fetchImplementation}
+        tokenStore={store}
+      >
+        <RequestHarness mode="optional" />
+      </SessionProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('session status').textContent).toBe('authenticated'),
+    );
+    const user = userEvent.setup();
+    await act(async () => user.click(screen.getByRole('button', { name: 'Run request' })));
+    await waitFor(() => expect(authorizations).toEqual(['Bearer older-token']));
+    await act(async () => user.click(screen.getByRole('button', { name: 'Accept newer token' })));
+    await act(async () =>
+      firstResponse.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('request result').textContent).toBe('success'),
+    );
+    expect(authorizations).toEqual(['Bearer older-token', 'Bearer newer-token', null]);
+    expect(store.value).toBe(null);
+    expect(screen.getByLabelText('session status').textContent).toBe('anonymous');
   });
 });
