@@ -78,6 +78,7 @@ export function createExceptionSafeAccessTokenStore(
       blocked = true;
       try {
         store.clear();
+        blocked = false;
       } catch {
         // Keep the store blocked for this provider even when persistence is unavailable.
       }

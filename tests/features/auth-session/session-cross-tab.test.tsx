@@ -79,7 +79,7 @@ function dispatchExternalTokenChange(): void {
 }
 
 function SessionProbe() {
-  const { cacheEpoch, requestRequired, state } = useSession();
+  const { cacheEpoch, clearSession, requestRequired, state } = useSession();
   const [result, setResult] = useState('idle');
 
   function run(method: 'GET' | 'POST') {
@@ -106,6 +106,9 @@ function SessionProbe() {
       </button>
       <button type="button" onClick={() => run('POST')}>
         Run private mutation
+      </button>
+      <button type="button" onClick={clearSession}>
+        Clear local session
       </button>
     </div>
   );
@@ -195,6 +198,30 @@ describe('SessionProvider external token ownership', () => {
       expect(queryClient.getQueryData(['private', epochA, 'cart'])).toBeUndefined(),
     );
     expect(queryClient.getQueryData(['public', 'catalog'])).toEqual({ retained: true });
+  });
+
+  it('accepts an external replacement login after this tab clears its local session', async () => {
+    const store = tokenStore('token-A');
+    const fetchImplementation = vi.fn<FetchArguments, FetchResult>(async (_input, init) =>
+      profileResponse(new Headers(init?.headers).get('Authorization')),
+    );
+
+    renderSession(store, fetchImplementation);
+    await expectAuthenticated('a@example.test');
+
+    await act(async () =>
+      userEvent.setup().click(screen.getByRole('button', { name: 'Clear local session' })),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('session state').textContent).toBe('anonymous'),
+    );
+    expect(store.value).toBeNull();
+
+    store.value = 'token-B';
+    await act(async () => dispatchExternalTokenChange());
+
+    await expectAuthenticated('b@example.test');
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a late A success after A to B to A without replacing the later A lifetime', async () => {

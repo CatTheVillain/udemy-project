@@ -17,6 +17,7 @@ export function useCheckoutSuccessNoticeDismissal(checkout: CartCompositeCheckou
   }, [checkout.dismissSuccessfulCourses, successfulCourseIds]);
 
   useEffect(() => {
+    if (checkout.phase !== 'checkout_completed') return undefined;
     const courseIds = checkout.results
       .filter((result) => result.kind === 'active')
       .map((result) => result.courseId);
@@ -26,7 +27,7 @@ export function useCheckoutSuccessNoticeDismissal(checkout: CartCompositeCheckou
       successfulPaymentNoticeLifetimeMs,
     );
     return () => globalThis.clearTimeout(timeoutId);
-  }, [checkout.results]);
+  }, [checkout.phase, checkout.results]);
 
   useEffect(
     () => () => {

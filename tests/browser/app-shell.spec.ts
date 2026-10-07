@@ -2059,6 +2059,39 @@ test('keeps anonymous mobile navigation in visual and keyboard order', async ({ 
   assertRuntimeClean();
 });
 
+test('restores the anonymous tablet menu trigger after current Catalog keyboard activation', async ({
+  page,
+}) => {
+  const assertRuntimeClean = monitorRuntime(page);
+  await page.setViewportSize({ width: 768, height: 844 });
+  await page.goto('/');
+  const menu = page.getByRole('button', { name: 'Open navigation' });
+  await menu.focus();
+  await page.keyboard.press('Enter');
+  const navigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+  const catalog = navigation.getByRole('link', { name: 'Catalog' });
+  await expect(catalog).toHaveAttribute('href', '/');
+  await expect(catalog).toHaveAttribute('aria-current', 'page');
+  await catalog.focus();
+  await page.keyboard.press('Enter');
+  await expect(navigation).toHaveCount(0);
+  await expect(menu).toBeFocused();
+  await expect(page).toHaveURL('/');
+
+  await page.keyboard.press('Enter');
+  const modifiedCatalog = page
+    .getByRole('navigation', { name: 'Mobile navigation' })
+    .getByRole('link', { name: 'Catalog' });
+  await modifiedCatalog.focus();
+  await page.keyboard.down('Control');
+  await page.keyboard.press('Enter');
+  await page.keyboard.up('Control');
+  await expect(modifiedCatalog).toBeFocused();
+  await expect(page.getByRole('navigation', { name: 'Mobile navigation' })).toBeVisible();
+  await expect(page).toHaveURL('/');
+  assertRuntimeClean();
+});
+
 test('keeps header and footer surfaces at the physical viewport edges without symmetric gutters', async ({
   page,
 }) => {

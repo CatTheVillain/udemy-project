@@ -201,6 +201,10 @@ describe('instructor lesson upload validation', () => {
     expect(isInstructorLessonUploadFileAccepted(file('notes.pdf', pdfLimit + 1), 'pdf')).toBe(
       false,
     );
+    expect(isInstructorLessonUploadFileAccepted(file('pdf', 1), 'pdf')).toBe(false);
+    expect(isInstructorLessonUploadFileAccepted(file('mp4', 1), 'video')).toBe(false);
+    expect(isInstructorLessonUploadFileAccepted(file('webm', 1), 'video')).toBe(false);
+    expect(isInstructorLessonUploadFileAccepted(file('mov', 1), 'video')).toBe(false);
     expect(isInstructorLessonUploadFileAccepted(file('notes', 1), 'pdf')).toBe(false);
     expect(isInstructorLessonUploadFileAccepted(file('notes.exe', 1), 'pdf')).toBe(false);
     expect(isInstructorLessonUploadFileAccepted(file('notes.pdf', 1), 'video')).toBe(false);

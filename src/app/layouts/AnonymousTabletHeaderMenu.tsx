@@ -13,6 +13,7 @@ interface AnonymousTabletHeaderMenuProps {
   readonly currentLocation: string;
   readonly navigation: readonly NavigationItem[];
   readonly onNavigate: (to: string) => void;
+  readonly routeFocusIdentity: string;
   readonly visible: boolean;
 }
 
@@ -20,6 +21,7 @@ export function AnonymousTabletHeaderMenu({
   currentLocation,
   navigation,
   onNavigate,
+  routeFocusIdentity,
   visible,
 }: AnonymousTabletHeaderMenuProps) {
   const { t } = useTranslation();
@@ -45,6 +47,10 @@ export function AnonymousTabletHeaderMenu({
   if (!visible) return null;
   const closeForRoute = (to: string) => {
     setOpen(false);
+    if (to === routeFocusIdentity) {
+      scheduleAppShellFocus(() => triggerRef.current?.focus());
+      return;
+    }
     onNavigate(to);
   };
   const closeToTrigger = () => {

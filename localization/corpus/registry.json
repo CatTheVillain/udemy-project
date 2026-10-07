@@ -37782,7 +37782,7 @@
         "sourcePath": "features/instructor-course-editor/validation.ts",
         "functionName": "resolveInstructorEditorFailureMessage",
         "bindingName": "t",
-        "sourceFingerprint": "sha256:26926c36d8cb24058a4da978ec1103272da915f9203d897f97bea6bafba183dd"
+        "sourceFingerprint": "sha256:509d7c9e560d032917c93c422596500bbda40bcd2f4ff0ede2c6a0f9e3e124da"
       },
       {
         "sourcePath": "pages/cart-page/CartPage.tsx",
@@ -37850,7 +37850,7 @@
         "sourcePath": "features/instructor-course-editor/validation.ts",
         "functionName": "resolveInstructorEditorFormFailure",
         "bindingName": "t",
-        "sourceFingerprint": "sha256:26926c36d8cb24058a4da978ec1103272da915f9203d897f97bea6bafba183dd"
+        "sourceFingerprint": "sha256:509d7c9e560d032917c93c422596500bbda40bcd2f4ff0ede2c6a0f9e3e124da"
       }
     ],
     "dynamicKeyFamilies": [
@@ -38255,28 +38255,28 @@
             "functionName": "resolveInstructorEditorFailureMessage",
             "argument": "`instructor:${message.key}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:26926c36d8cb24058a4da978ec1103272da915f9203d897f97bea6bafba183dd"
+            "sourceFingerprint": "sha256:509d7c9e560d032917c93c422596500bbda40bcd2f4ff0ede2c6a0f9e3e124da"
           },
           {
             "sourcePath": "features/instructor-course-editor/validation.ts",
             "functionName": "resolveInstructorEditorFailureMessage",
             "argument": "`instructor:${message.labelKey}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:26926c36d8cb24058a4da978ec1103272da915f9203d897f97bea6bafba183dd"
+            "sourceFingerprint": "sha256:509d7c9e560d032917c93c422596500bbda40bcd2f4ff0ede2c6a0f9e3e124da"
           },
           {
             "sourcePath": "features/instructor-course-editor/validation.ts",
             "functionName": "resolveInstructorEditorFailureMessage",
             "argument": "`instructor:${message.labelKey}`",
             "occurrence": 2,
-            "sourceFingerprint": "sha256:26926c36d8cb24058a4da978ec1103272da915f9203d897f97bea6bafba183dd"
+            "sourceFingerprint": "sha256:509d7c9e560d032917c93c422596500bbda40bcd2f4ff0ede2c6a0f9e3e124da"
           },
           {
             "sourcePath": "features/instructor-course-editor/validation.ts",
             "functionName": "resolveInstructorEditorFailureMessage",
             "argument": "`instructor:${message.actionKey}`",
             "occurrence": 1,
-            "sourceFingerprint": "sha256:26926c36d8cb24058a4da978ec1103272da915f9203d897f97bea6bafba183dd"
+            "sourceFingerprint": "sha256:509d7c9e560d032917c93c422596500bbda40bcd2f4ff0ede2c6a0f9e3e124da"
           }
         ]
       },
@@ -39227,6 +39227,26 @@
             "sourcePath": "pages/instructor-lesson-editor-page/InstructorLessonEditorPage.tsx",
             "sourceFingerprint": "sha256:8a3afc8085be265e1466d70cec6b9f600bd5ee22b31fd4b34c7965d6a1879422",
             "entryCount": 1
+          }
+        ]
+      },
+      {
+        "request": {
+          "taskId": "FE-073",
+          "sources": [
+            {
+              "sourcePath": "features/instructor-course-editor/validation.ts",
+              "expectedSourceFingerprint": "sha256:26926c36d8cb24058a4da978ec1103272da915f9203d897f97bea6bafba183dd"
+            }
+          ],
+          "obsolete": []
+        },
+        "requestDigest": "sha256:d4dd5591061fecc95a5447195fc42d275f4d578fc5dc8a0727d160e77bf3d372",
+        "sources": [
+          {
+            "sourcePath": "features/instructor-course-editor/validation.ts",
+            "sourceFingerprint": "sha256:509d7c9e560d032917c93c422596500bbda40bcd2f4ff0ede2c6a0f9e3e124da",
+            "entryCount": 6
           }
         ]
       }

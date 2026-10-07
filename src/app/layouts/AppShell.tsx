@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
@@ -30,7 +30,6 @@ export function AppShell() {
   const navigate = useNavigate();
   const navigationType = useNavigationType();
   const mainRef = useRef<HTMLElement>(null);
-  const [logoutPending, setLogoutPending] = useState(false);
   const [isStudentMobileViewport, setIsStudentMobileViewport] = useState(false);
   const [catalogSearchFocusIntent, setCatalogSearchFocusIntent] =
     useState<CatalogSearchFocusIntent | null>(null);
@@ -65,19 +64,16 @@ export function AppShell() {
       : null;
 
   const requestLogout = useCallback(() => {
-    setLogoutPending(true);
-    navigate('/', { replace: true, flushSync: true });
-  }, [navigate]);
+    startTransition(() => {
+      clearSession();
+      navigate('/', { replace: true });
+    });
+  }, [clearSession, navigate]);
   const requestInstructorCourseCreate = useCallback(
     () => requestInstructorCourseCreateDisclosure(),
     [],
   );
 
-  useEffect(() => {
-    if (!logoutPending || location.pathname !== '/') return;
-    clearSession();
-    setLogoutPending(false);
-  }, [clearSession, location.pathname, logoutPending]);
   useLayoutEffect(() => {
     if (densityMode !== routeDensityMode) setDensityMode(routeDensityMode);
   }, [densityMode, routeDensityMode, setDensityMode]);

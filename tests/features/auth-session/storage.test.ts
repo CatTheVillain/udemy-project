@@ -9,10 +9,7 @@ import {
 } from '../../../src/features/auth-session/storage';
 
 const storageKey = 'learnhub.storage-test-token';
-const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(
-  globalThis,
-  'localStorage',
-);
+const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
 
 function restoreLocalStorage() {
   if (originalLocalStorageDescriptor) {
@@ -57,9 +54,7 @@ describe('access-token storage', () => {
 
   it('fails closed when browser storage is unavailable', () => {
     makeLocalStorageUnavailable();
-    const store = createExceptionSafeAccessTokenStore(
-      createBrowserAccessTokenStore(storageKey),
-    );
+    const store = createExceptionSafeAccessTokenStore(createBrowserAccessTokenStore(storageKey));
 
     expect(store.get()).toBeNull();
 
@@ -73,9 +68,15 @@ describe('access-token storage', () => {
   });
 
   it('fails closed when the underlying storage methods throw', () => {
-    const get = vi.fn(() => { throw new Error('read denied'); });
-    const set = vi.fn(() => { throw new Error('write denied'); });
-    const clear = vi.fn(() => { throw new Error('clear denied'); });
+    const get = vi.fn(() => {
+      throw new Error('read denied');
+    });
+    const set = vi.fn(() => {
+      throw new Error('write denied');
+    });
+    const clear = vi.fn(() => {
+      throw new Error('clear denied');
+    });
     const throwingStore: AccessTokenStore = { get, set, clear };
     const store = createExceptionSafeAccessTokenStore(throwingStore);
 
@@ -89,5 +90,24 @@ describe('access-token storage', () => {
 
     expect(() => store.clear()).not.toThrow();
     expect(clear).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not resurrect A after a failed clear leaves the raw token behind', () => {
+    const get = vi.fn(() => 'token-A');
+    const clear = vi.fn(() => {
+      throw new Error('clear denied');
+    });
+    const store = createExceptionSafeAccessTokenStore({
+      get,
+      set: vi.fn(),
+      clear,
+    });
+
+    expect(store.get()).toBe('token-A');
+    expect(() => store.clear()).not.toThrow();
+    expect(get()).toBe('token-A');
+    expect(store.get()).toBeNull();
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(clear).toHaveBeenCalledTimes(1);
   });
 });

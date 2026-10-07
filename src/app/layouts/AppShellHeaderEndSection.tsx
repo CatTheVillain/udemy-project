@@ -4,7 +4,6 @@ import { LanguageSelector } from '@shared/locale';
 
 import { AccountMenu } from './AccountMenu';
 import { AiAssistantNavigationLink } from './AiAssistantNavigationLink';
-import { AuthenticatedHeaderDrawerMenu } from './AuthenticatedHeaderDrawerMenu';
 import { CartNavigationLink } from './CartNavigationLink';
 import { focusInstructorCourseTitle } from './app-shell-focus';
 import { MobileHeaderNavigationMenu } from './MobileHeaderNavigationMenu';
@@ -122,19 +121,6 @@ export function AppShellHeaderEndSection({
             >
               <NavigationLinks items={presentation.desktopAuthActions} />
             </nav>
-          ) : null}
-          {presentation.isInstructor && presentation.isAuthenticatedMobile ? (
-            <AuthenticatedHeaderDrawerMenu
-              currentLocation={presentation.currentLocation}
-              isInstructorCoursesRoute={presentation.isInstructorCoursesRoute}
-              mainRef={header.mainRef}
-              navigation={presentation.navigation}
-              onCreateCourse={header.onCreateCourse}
-              onLogOut={header.onLogOut}
-              routeFocusIdentity={header.routeFocusIdentity}
-              state={header.state}
-              visible
-            />
           ) : null}
           <div
             className={

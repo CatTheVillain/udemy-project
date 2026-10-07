@@ -1116,6 +1116,42 @@ describe('AppShell student cart query and presentation', () => {
     expect(within(drawer).getByRole('button', { name: 'Log out' })).toBeTruthy();
   });
 
+  it('closes the anonymous tablet menu and restores its trigger after keyboard activation of the current Catalog link', async () => {
+    stubTabletViewport();
+    const user = userEvent.setup();
+    renderShell(authenticatedClient('student'), null, '/');
+
+    const trigger = await screen.findByRole('button', { name: 'Open navigation' });
+    await act(async () => {
+      await user.click(trigger);
+    });
+    const navigation = await screen.findByRole('navigation', { name: 'Mobile navigation' });
+    const catalog = within(navigation).getByRole('link', { name: 'Catalog' });
+
+    await act(async () => {
+      catalog.focus();
+      await user.keyboard('{Enter}');
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).toBeNull(),
+    );
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it('keeps the anonymous tablet menu open for modified Catalog navigation', async () => {
+    stubTabletViewport();
+    renderShell(authenticatedClient('student'), null, '/');
+
+    const trigger = await screen.findByRole('button', { name: 'Open navigation' });
+    fireEvent.click(trigger);
+    const navigation = await screen.findByRole('navigation', { name: 'Mobile navigation' });
+    fireEvent.click(within(navigation).getByRole('link', { name: 'Catalog' }), { ctrlKey: true });
+
+    expect(screen.getByRole('navigation', { name: 'Mobile navigation' })).toBe(navigation);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('keeps compact Instructor actions ordered, removes the duplicate header creation action, and retains drawer creation', async () => {
     stubCompactViewport();
     renderShell(authenticatedClient('instructor'), 'instructor-token', '/instructor/courses');

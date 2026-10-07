@@ -32,6 +32,7 @@ export function getInstructorLessonUploadRule(type: LessonType): InstructorLesso
 export function isInstructorLessonUploadFileAccepted(file: File, type: LessonType): boolean {
   const rule = getInstructorLessonUploadRule(type);
   if (rule === null) return false;
+  if (!file.name.includes('.')) return false;
   const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
   return rule.accept.split(',').includes(extension) && file.size <= rule.maxBytes;
 }

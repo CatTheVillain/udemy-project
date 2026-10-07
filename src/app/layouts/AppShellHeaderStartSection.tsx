@@ -59,12 +59,13 @@ export function AppShellHeaderStartSection({
         onLogOut={header.onLogOut}
         routeFocusIdentity={header.routeFocusIdentity}
         state={header.state}
-        visible={presentation.isAuthenticatedTablet}
+        visible={presentation.isAuthenticatedTablet || presentation.isInstructorCompactDrawer}
       />
       <AnonymousTabletHeaderMenu
         currentLocation={presentation.currentLocation}
         navigation={presentation.navigation}
         onNavigate={header.onRequestMainFocus}
+        routeFocusIdentity={header.routeFocusIdentity}
         visible={presentation.isAnonymousTablet}
       />
     </div>
