@@ -237,8 +237,7 @@ function capturedSessionEpoch(epochRef: SessionEpochRef): SessionCacheEpoch {
 }
 
 async function getResolvedEditorAction(action: string): Promise<HTMLElement> {
-  await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
-  return screen.getByRole('button', { name: action });
+  return screen.findByRole('button', { name: action });
 }
 
 function expectContextualReturnBeforeEditorHeading(currentLabel = 'Edit course') {

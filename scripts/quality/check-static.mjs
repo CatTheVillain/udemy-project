@@ -82,57 +82,64 @@ function nodeSymbol(node) {
         ts.isClassDeclaration(current)) &&
       current.name
     )
-      return current.name.text;
+      return { declaration: current, symbol: current.name.text };
     if (ts.isVariableDeclaration(current)) {
-      if (ts.isIdentifier(current.name)) return current.name.text;
+      if (ts.isIdentifier(current.name)) return { declaration: current, symbol: current.name.text };
       if (ts.isArrayBindingPattern(current.name)) {
         const binding = current.name.elements.find(
           (element) => ts.isBindingElement(element) && ts.isIdentifier(element.name),
         );
-        if (binding && ts.isIdentifier(binding.name)) return binding.name.text;
+        if (binding && ts.isIdentifier(binding.name))
+          return { declaration: current, symbol: binding.name.text };
       }
     }
-    if (ts.isParameter(current) && ts.isIdentifier(current.name)) return current.name.text;
+    if (ts.isParameter(current) && ts.isIdentifier(current.name))
+      return { declaration: current, symbol: current.name.text };
     if (
       (ts.isPropertySignature(current) || ts.isPropertyDeclaration(current)) &&
       current.name &&
       (ts.isIdentifier(current.name) || ts.isStringLiteral(current.name))
     )
-      return current.name.text;
+      return { declaration: current, symbol: current.name.text };
   }
   return undefined;
 }
 
-function hasExactSuppressionComment(sourceFile, node, symbol) {
-  const marker = `quality-exception: TS-TYPE-002 ${symbol} `;
-  for (let current = node; current; current = current.parent) {
-    const comments = ts.getLeadingCommentRanges(sourceFile.text, current.getFullStart()) ?? [];
-    if (
-      comments.some(({ pos, end }) => {
-        const comment = sourceFile.text
-          .slice(pos, end)
-          .replace(/^\/\/\s?/, '')
-          .trim();
-        const gap = sourceFile.text.slice(end, current.getStart(sourceFile));
-        return comment.startsWith(marker) && !/\r?\n[ \t]*\r?\n/.test(gap);
-      })
-    )
-      return true;
-  }
-  return false;
+function commentCarrier(declaration) {
+  if (!ts.isVariableDeclaration(declaration)) return declaration;
+  const declarationList = declaration.parent;
+  return ts.isVariableDeclarationList(declarationList) &&
+    ts.isVariableStatement(declarationList.parent)
+    ? declarationList.parent
+    : declaration;
 }
 
-function isExactAdapter(file, symbol, projection, sourceFile, node) {
+function hasExactSuppressionComment(sourceFile, owner) {
+  const { declaration, symbol } = owner;
+  const marker = `quality-exception: TS-TYPE-002 ${symbol} `;
+  const carrier = commentCarrier(declaration);
+  const comments = ts.getLeadingCommentRanges(sourceFile.text, carrier.getFullStart()) ?? [];
+  return comments.some(({ pos, end }) => {
+    const comment = sourceFile.text
+      .slice(pos, end)
+      .replace(/^\/\/\s?/, '')
+      .trim();
+    const gap = sourceFile.text.slice(end, carrier.getStart(sourceFile));
+    return comment.startsWith(marker) && !/\r?\n[ \t]*\r?\n/.test(gap);
+  });
+}
+
+function isExactAdapter(file, owner, projection, sourceFile) {
   if (
     exactProjectionExceptions.some(
       (exception) =>
         exception.path === file &&
-        exception.symbol === symbol &&
+        exception.symbol === owner.symbol &&
         exception.projection === projection,
     )
   )
     return true;
-  return hasExactSuppressionComment(sourceFile, node, symbol);
+  return hasExactSuppressionComment(sourceFile, owner);
 }
 
 export function analyseSourceText(file, content, sourceRoot = root) {
@@ -142,12 +149,12 @@ export function analyseSourceText(file, content, sourceRoot = root) {
   function visit(node) {
     if (ts.isIndexedAccessTypeNode(node)) {
       const projection = namedProjection(node);
-      const symbol = nodeSymbol(node);
+      const owner = nodeSymbol(node);
       if (
         projection &&
-        symbol &&
+        owner &&
         !ts.findAncestor(node, ts.isInterfaceDeclaration) &&
-        !isExactAdapter(normalizedFile, symbol, projection, sourceFile, node)
+        !isExactAdapter(normalizedFile, owner, projection, sourceFile)
       ) {
         findings.push(
           finding(

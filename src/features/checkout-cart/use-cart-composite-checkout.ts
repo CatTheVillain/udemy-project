@@ -696,7 +696,11 @@ export function useCartCompositeCheckout(
       try {
         const [enrollments, freshCart] = await Promise.all([
           requestEnrollments(session, attempt.controller.signal),
-          requestCart(session, attempt.controller.signal),
+          queryClient.fetchQuery({
+            queryKey: cartQueryKey(attempt.subject),
+            queryFn: ({ signal }) => requestCart(session, signal),
+            staleTime: 0,
+          }),
         ]);
         if (!isCurrentDiscovery(attempt)) return;
         const recovery = recoveryContextFrom(
