@@ -101,10 +101,20 @@ async function readPackageMap(path, label) {
   return value.packages;
 }
 
+function dependencyMetadataMatches(stagedRecord, installedRecord) {
+  if (isDeepStrictEqual(stagedRecord, installedRecord)) return true;
+  // npm's installed v3 metadata can omit libc while the full lock retains it.
+  if (!Object.hasOwn(stagedRecord, 'libc') || Object.hasOwn(installedRecord, 'libc')) return false;
+  const stagedWithoutLibc = { ...stagedRecord };
+  delete stagedWithoutLibc.libc;
+  return isDeepStrictEqual(stagedWithoutLibc, installedRecord);
+}
+
 function assertDependencyMetadataMatches(staged, installed) {
   if (
     Object.entries(installed).some(
-      ([path, record]) => !Object.hasOwn(staged, path) || !isDeepStrictEqual(staged[path], record),
+      ([path, record]) =>
+        !Object.hasOwn(staged, path) || !dependencyMetadataMatches(staged[path], record),
     ) ||
     Object.entries(staged).some(
       ([path, record]) => path && record.optional !== true && !Object.hasOwn(installed, path),

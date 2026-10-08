@@ -815,6 +815,19 @@ async function stagedBackendCheckerFixture(): Promise<StagedBackendCheckerFixtur
   return { directory, snapshotRoot, repositoryRoot, stagedLock, installedLock };
 }
 
+async function stagedBackendCheckerFixtureState(fixture: StagedBackendCheckerFixture) {
+  const [runtimeEntries, stagedLock, installedLock] = await Promise.all([
+    stagedBackendRuntimeEntries(),
+    readFile(fixture.stagedLock),
+    readFile(fixture.installedLock),
+  ]);
+  return {
+    runtimeEntries,
+    stagedHash: createHash('sha256').update(stagedLock).digest('hex'),
+    installedHash: createHash('sha256').update(installedLock).digest('hex'),
+  };
+}
+
 async function privateHookTree(repository: string) {
   const directory = await mkdtemp(resolve(tmpdir(), 'quality-index-guard-'));
   const privateIndex = resolve(directory, 'index');
@@ -2382,12 +2395,119 @@ describe('staged and CI decision simulations', () => {
     expect(`${result.stdout}\n${result.stderr}`).toContain(
       'Backend npm command failed: --fund=false.',
     );
-    expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid: lock file's @nestjs/common@");
     expect(fullCheckerCalls(calls)).toHaveLength(1);
     expect(backendNpmCiCalls(calls)).toHaveLength(1);
     expect(backendNpmScripts(calls)).toEqual([]);
     await expectProtectedHookState(fixture.repository, before);
   }, 180_000);
+
+  it('permits an installed lock record that omits only the staged libc field and reaches scripts', async () => {
+    const fixture = await stagedBackendCheckerFixture();
+    const [stagedLock, installedLock] = await Promise.all([
+      readFile(fixture.stagedLock, 'utf8'),
+      readFile(fixture.installedLock, 'utf8'),
+    ]);
+    const staged = JSON.parse(stagedLock) as { packages: Record<string, Record<string, unknown>> };
+    const installed = JSON.parse(installedLock) as {
+      packages: Record<string, Record<string, unknown>>;
+    };
+    const candidate = Object.entries(staged.packages).find(
+      ([path, record]) => path && Object.prototype.hasOwnProperty.call(record, 'libc'),
+    );
+
+    expect(candidate).toBeDefined();
+    if (!candidate) throw new Error('A staged libc lock record is unavailable.');
+    const [path, stagedRecord] = candidate;
+    installed.packages[path] = { ...stagedRecord };
+    delete installed.packages[path].libc;
+    await writeFile(fixture.installedLock, `${JSON.stringify(installed, null, 2)}\n`);
+    const before = await stagedBackendCheckerFixtureState(fixture);
+
+    await expect(
+      runStagedBackendCheck({
+        snapshotRoot: fixture.snapshotRoot,
+        repositoryRoot: fixture.repositoryRoot,
+      }),
+    ).rejects.toThrow('Backend npm command failed: format:check.');
+    expect(await stagedBackendCheckerFixtureState(fixture)).toEqual(before);
+  }, 180_000);
+
+  it('rejects a divergent installed libc field before backend scripts run', async () => {
+    const fixture = await stagedBackendCheckerFixture();
+    const [stagedLock, installedLock] = await Promise.all([
+      readFile(fixture.stagedLock, 'utf8'),
+      readFile(fixture.installedLock, 'utf8'),
+    ]);
+    const staged = JSON.parse(stagedLock) as { packages: Record<string, Record<string, unknown>> };
+    const installed = JSON.parse(installedLock) as {
+      packages: Record<string, Record<string, unknown>>;
+    };
+    const candidate = Object.entries(staged.packages).find(
+      ([path, record]) => path && Object.prototype.hasOwnProperty.call(record, 'libc'),
+    );
+
+    expect(candidate).toBeDefined();
+    if (!candidate) throw new Error('A staged libc lock record is unavailable.');
+    const [path, stagedRecord] = candidate;
+    const divergentLibc = ['bs001-fixture-divergent-libc'];
+    expect(stagedRecord.libc).not.toEqual(divergentLibc);
+    installed.packages[path] = { ...stagedRecord, libc: divergentLibc };
+    await writeFile(fixture.installedLock, `${JSON.stringify(installed, null, 2)}\n`);
+    const before = await stagedBackendCheckerFixtureState(fixture);
+
+    await expect(
+      runStagedBackendCheck({
+        snapshotRoot: fixture.snapshotRoot,
+        repositoryRoot: fixture.repositoryRoot,
+      }),
+    ).rejects.toThrow('Backend dependency metadata mismatch.');
+    expect(await stagedBackendCheckerFixtureState(fixture)).toEqual(before);
+  }, 180_000);
+
+  it.each([
+    ['version', '0.0.0'],
+    ['integrity', 'sha512-bs001-fixture-mismatch'],
+  ] as const)(
+    'rejects an installed %s mismatch even when its staged libc field is omitted',
+    async (field, replacement) => {
+      const fixture = await stagedBackendCheckerFixture();
+      const [stagedLock, installedLock] = await Promise.all([
+        readFile(fixture.stagedLock, 'utf8'),
+        readFile(fixture.installedLock, 'utf8'),
+      ]);
+      const staged = JSON.parse(stagedLock) as {
+        packages: Record<string, Record<string, unknown>>;
+      };
+      const installed = JSON.parse(installedLock) as {
+        packages: Record<string, Record<string, unknown>>;
+      };
+      const candidate = Object.entries(staged.packages).find(
+        ([path, record]) =>
+          path &&
+          Object.prototype.hasOwnProperty.call(record, 'libc') &&
+          typeof record.version === 'string' &&
+          typeof record.integrity === 'string',
+      );
+
+      expect(candidate).toBeDefined();
+      if (!candidate) throw new Error('A staged libc versioned lock record is unavailable.');
+      const [path, stagedRecord] = candidate;
+      expect(stagedRecord[field]).not.toBe(replacement);
+      installed.packages[path] = { ...stagedRecord, [field]: replacement };
+      delete installed.packages[path].libc;
+      await writeFile(fixture.installedLock, `${JSON.stringify(installed, null, 2)}\n`);
+      const before = await stagedBackendCheckerFixtureState(fixture);
+
+      await expect(
+        runStagedBackendCheck({
+          snapshotRoot: fixture.snapshotRoot,
+          repositoryRoot: fixture.repositoryRoot,
+        }),
+      ).rejects.toThrow('Backend dependency metadata mismatch.');
+      expect(await stagedBackendCheckerFixtureState(fixture)).toEqual(before);
+    },
+    180_000,
+  );
 
   it('rejects missing fixture-owned installed dependency metadata after isolated npm preparation', async () => {
     const fixture = await stagedBackendCheckerFixture();
