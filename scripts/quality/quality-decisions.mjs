@@ -7,6 +7,18 @@ export const requiredQualityJobs = [
   'quality-report',
 ];
 
+export function isBackendSourcePath(path) {
+  const normalized = path.replace(/\\/g, '/');
+  return normalized === 'backend' || normalized.startsWith('backend/');
+}
+
+export function isBackendQualityPath(path) {
+  return (
+    isBackendSourcePath(path) ||
+    path.replace(/\\/g, '/') === '.github/workflows/backend-quality.yml'
+  );
+}
+
 export function stagedPredicatePlan(paths) {
   const normalized = paths.map((path) => path.replace(/\\/g, '/'));
   const selected = {

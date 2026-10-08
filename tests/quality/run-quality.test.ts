@@ -715,6 +715,20 @@ function gitFixture(repository: string, args: string[], options: Record<string, 
   return result;
 }
 
+function formatFixturePaths(repository: string, paths: string[]) {
+  const result = spawnSync(
+    process.execPath,
+    [resolve(repository, 'node_modules/prettier/bin/prettier.cjs'), '--write', ...paths],
+    {
+      cwd: repository,
+      encoding: 'utf8',
+      shell: false,
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  );
+  expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+}
+
 function selectedHookIndex() {
   if (process.env.GIT_INDEX_FILE)
     return isAbsolute(process.env.GIT_INDEX_FILE)
@@ -804,6 +818,24 @@ async function stage0HookFixture(): Promise<Stage0HookFixture> {
   expect(unpack.status, `${unpack.stdout}\n${unpack.stderr}`).toBe(0);
   await rm(archive);
   await rm(privateIndex);
+  await Promise.all([
+    copyFile(
+      resolve('scripts/quality/run-staged-quality.mjs'),
+      resolve(source, 'scripts/quality/run-staged-quality.mjs'),
+    ),
+    copyFile(
+      resolve('scripts/quality/quality-decisions.mjs'),
+      resolve(source, 'scripts/quality/quality-decisions.mjs'),
+    ),
+    ...(existsSync(resolve('scripts/quality/check-staged-backend.mjs'))
+      ? [
+          copyFile(
+            resolve('scripts/quality/check-staged-backend.mjs'),
+            resolve(source, 'scripts/quality/check-staged-backend.mjs'),
+          ),
+        ]
+      : []),
+  ]);
   gitFixture(source, ['init']);
   gitFixture(source, ['add', '-A']);
   gitFixture(source, [
@@ -819,6 +851,11 @@ async function stage0HookFixture(): Promise<Stage0HookFixture> {
   await symlink(
     resolve('node_modules'),
     resolve(repository, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
+  await symlink(
+    resolve('backend', 'node_modules'),
+    resolve(repository, 'backend', 'node_modules'),
     process.platform === 'win32' ? 'junction' : 'dir',
   );
   const preload = resolve(directory, 'child-process-trace.cjs');
@@ -867,6 +904,19 @@ function fullCheckerCalls(calls: HookTraceCall[]) {
       argument.replace(/\\/g, '/').endsWith('check-full-staged-snapshot.mjs'),
     ),
   );
+}
+
+function backendNpmScripts(calls: HookTraceCall[]) {
+  const scripts = ['format:check', 'lint', 'typecheck', 'test:unit', 'test:e2e', 'build'];
+  return calls
+    .filter(
+      ({ command, args }) =>
+        command.replace(/\\/g, '/').endsWith('/npm') ||
+        command === 'npm' ||
+        args.some((argument) => argument.replace(/\\/g, '/').endsWith('npm-cli.js')),
+    )
+    .map(({ args }) => args.find((argument) => scripts.includes(argument)))
+    .filter((script): script is string => Boolean(script));
 }
 
 function hasOrderedSteps(source: string, steps: readonly string[]) {
@@ -2095,6 +2145,145 @@ describe('staged and CI decision simulations', () => {
     const parsed = JSON.parse(packageJson) as { scripts: Record<string, string> };
     expect(parsed.scripts['precommit:staged']).toBe('lint-staged');
   });
+
+  it('runs backend tools against staged backend bytes without sending them to frontend ESLint', async () => {
+    const fixture = await stage0HookFixture();
+    const backendSource = resolve(fixture.repository, 'backend/src/quality-stage0-oracle.ts');
+    const backendConfig = resolve(fixture.repository, 'backend/.prettierrc.json');
+    const backendTest = resolve(fixture.repository, 'backend/test/hello.contract.e2e-spec.ts');
+    const backendPackage = resolve(fixture.repository, 'backend/package.json');
+    const packageJson = JSON.parse(await readFile(backendPackage, 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    const configJson = JSON.parse(await readFile(backendConfig, 'utf8')) as Record<string, unknown>;
+    packageJson.scripts['test:e2e'] = `${packageJson.scripts['test:e2e']} `;
+    configJson.bracketSameLine = false;
+    await Promise.all([
+      writeFile(backendSource, 'export const stageZeroBackendOracle = true;\n'),
+      writeFile(
+        backendTest,
+        `// staged backend hook fixture\n${await readFile(backendTest, 'utf8')}`,
+      ),
+      writeFile(backendPackage, `${JSON.stringify(packageJson, null, 2)}\n`),
+      writeFile(backendConfig, `${JSON.stringify(configJson, null, 2)}\n`),
+    ]);
+    formatFixturePaths(fixture.repository, [backendPackage, backendConfig]);
+    gitFixture(fixture.repository, [
+      'add',
+      '--',
+      'backend/src/quality-stage0-oracle.ts',
+      'backend/.prettierrc.json',
+      'backend/test/hello.contract.e2e-spec.ts',
+      'backend/package.json',
+    ]);
+    await Promise.all([
+      writeFile(backendSource, 'export const = ;\n'),
+      writeFile(backendTest, "throw new Error('unstaged test bytes');\n"),
+      writeFile(backendPackage, '{'),
+      writeFile(backendConfig, '{'),
+    ]);
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(commandIndex(calls, 'prettier.cjs')).toBe(-1);
+    expect(commandIndex(calls, 'eslint.js')).toBe(-1);
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(backendNpmScripts(calls)).toEqual([
+      'format:check',
+      'lint',
+      'typecheck',
+      'test:unit',
+      'test:e2e',
+      'build',
+    ]);
+    expect(result.stdout).toContain('QUALITY_FULL_CHECK_PASS');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 180_000);
+
+  it('routes a staged backend deletion through the backend gate and fails closed without dependencies', async () => {
+    const fixture = await stage0HookFixture();
+    gitFixture(fixture.repository, ['rm', '--', 'backend/README.md']);
+    const before = await protectedHookState(fixture.repository);
+    await rm(resolve(fixture.repository, 'backend/node_modules'), { recursive: true, force: true });
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(commandIndex(calls, 'prettier.cjs')).toBe(-1);
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Backend dependencies are unavailable.');
+    expect(`${result.stdout}\n${result.stderr}`).toContain('QUALITY_FULL_CHECK_PASS');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
+
+  it('routes the backend CI workflow through root formatting and the backend gate', async () => {
+    const fixture = await stage0HookFixture();
+    const workflow = resolve(fixture.repository, '.github/workflows/backend-quality.yml');
+    await writeFile(workflow, `${await readFile(workflow, 'utf8')}# staged backend gate\n`);
+    gitFixture(fixture.repository, ['add', '--', '.github/workflows/backend-quality.yml']);
+    const before = await protectedHookState(fixture.repository);
+    await rm(resolve(fixture.repository, 'backend/node_modules'), { recursive: true, force: true });
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(commandIndex(calls, 'prettier.cjs')).toBeGreaterThanOrEqual(0);
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Backend dependencies are unavailable.');
+    expect(`${result.stdout}\n${result.stderr}`).toContain('QUALITY_FULL_CHECK_PASS');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
+
+  it('routes a deleted backend CI workflow to the backend gate without frontend predicates', async () => {
+    const fixture = await stage0HookFixture();
+    gitFixture(fixture.repository, ['rm', '--', '.github/workflows/backend-quality.yml']);
+    const before = await protectedHookState(fixture.repository);
+    await rm(resolve(fixture.repository, 'backend/node_modules'), { recursive: true, force: true });
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(commandIndex(calls, 'prettier.cjs')).toBe(-1);
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Backend dependencies are unavailable.');
+    expect(`${result.stdout}\n${result.stderr}`).toContain('QUALITY_FULL_CHECK_PASS');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
+
+  it('stops on malformed backend workflow formatting before snapshot or backend validation', async () => {
+    const fixture = await stage0HookFixture();
+    const workflow = resolve(fixture.repository, '.github/workflows/backend-quality.yml');
+    await writeFile(workflow, 'name:   backend quality\n');
+    gitFixture(fixture.repository, ['add', '--', '.github/workflows/backend-quality.yml']);
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(commandIndex(calls, 'prettier.cjs')).toBeGreaterThanOrEqual(0);
+    expect(fullCheckerCalls(calls)).toHaveLength(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Prettier check failed.');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
+
+  it('authenticates malformed staged backend source before the backend checker rejects it', async () => {
+    const fixture = await stage0HookFixture();
+    const backendSource = resolve(fixture.repository, 'backend/src/quality-stage0-invalid.ts');
+    await writeFile(backendSource, 'export const stageZeroBackendInvalid = ;\n');
+    gitFixture(fixture.repository, ['add', '--', 'backend/src/quality-stage0-invalid.ts']);
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(commandIndex(calls, 'prettier.cjs')).toBe(-1);
+    expect(commandIndex(calls, 'eslint.js')).toBe(-1);
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('QUALITY_FULL_CHECK_PASS');
+    await expectProtectedHookState(fixture.repository, before);
+  }, 90_000);
 
   it('models staged clean, fail, non-target, and bypass semantics without touching the index', () => {
     expect(

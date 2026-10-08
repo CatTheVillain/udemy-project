@@ -98,14 +98,14 @@ async function project(records) {
     if (!complete) await rm(snapshot, { recursive: true, force: true });
   }
 }
-function changedPaths(indexFile, records) {
+function changedPaths(indexFile, records, filter, requireStageMember = true) {
   const paths = decodeNulList(
-    git(['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR', 'HEAD'], {
+    git(['diff', '--cached', '--name-only', '-z', `--diff-filter=${filter}`, 'HEAD'], {
       env: { ...process.env, GIT_INDEX_FILE: indexFile },
     }),
   );
   const members = new Set(records.map(({ path }) => path));
-  if (paths.some((path) => !members.has(path)))
+  if (paths.some((path) => !validPath(path) || (requireStageMember && !members.has(path))))
     throw new Error('Changed path is not a stage-0 member.');
   return paths;
 }
@@ -129,11 +129,14 @@ async function main() {
     records = identity.records;
     beforeHash = await checkoutHash(records);
     snapshot = await project(records);
-    const { stagedPredicatePlan } = await import(
+    const { isBackendQualityPath, isBackendSourcePath, stagedPredicatePlan } = await import(
       pathToFileURL(resolve(snapshot, 'scripts/quality/quality-decisions.mjs')).href
     );
-    const changed = changedPaths(privateIndex, records);
-    const plan = stagedPredicatePlan(changed);
+    const changed = changedPaths(privateIndex, records, 'ACMR');
+    const plan = stagedPredicatePlan(changed.filter((path) => !isBackendSourcePath(path)));
+    const backendChanged = changedPaths(privateIndex, records, 'ACMRD', false).some(
+      isBackendQualityPath,
+    );
     const projected = (paths) => paths.map((path) => resolve(snapshot, path));
     const exe = (path) => resolve(root, path);
     if (
@@ -211,6 +214,12 @@ async function main() {
       )
     )
       throw new Error('Authenticated full checker failed.');
+    if (backendChanged) {
+      const { runStagedBackendCheck } = await import(
+        pathToFileURL(resolve(snapshot, 'scripts/quality/check-staged-backend.mjs')).href
+      );
+      await runStagedBackendCheck({ snapshotRoot: snapshot, repositoryRoot });
+    }
   } catch (error) {
     failure = error;
   } finally {

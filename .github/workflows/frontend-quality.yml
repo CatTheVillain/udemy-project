@@ -112,6 +112,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix backend
       - id: execute
         name: Execute tests quality group
         run: |
