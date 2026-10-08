@@ -1,7 +1,19 @@
-import { cp, lstat, mkdtemp, readFile, readdir, rm, stat, symlink, unlink } from 'node:fs/promises';
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  unlink,
+} from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
 
 const backendScripts = ['format:check', 'lint', 'typecheck', 'test:unit', 'test:e2e', 'build'];
 
@@ -67,6 +79,40 @@ async function npmInvocation() {
   return { command: process.execPath, prefix: [npmCli] };
 }
 
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+async function readPackageMap(path, label) {
+  let value;
+  try {
+    value = JSON.parse(await readFile(path, 'utf8'));
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error(`${label} dependency metadata is invalid.`);
+    throw new Error(`${label} dependency metadata is unavailable.`);
+  }
+  if (
+    !isRecord(value) ||
+    value.lockfileVersion !== 3 ||
+    !isRecord(value.packages) ||
+    Object.values(value.packages).some((record) => !isRecord(record))
+  )
+    throw new Error(`${label} dependency metadata is invalid.`);
+  return value.packages;
+}
+
+function assertDependencyMetadataMatches(staged, installed) {
+  if (
+    Object.entries(installed).some(
+      ([path, record]) => !Object.hasOwn(staged, path) || !isDeepStrictEqual(staged[path], record),
+    ) ||
+    Object.entries(staged).some(
+      ([path, record]) => path && record.optional !== true && !Object.hasOwn(installed, path),
+    )
+  )
+    throw new Error('Backend dependency metadata mismatch.');
+}
+
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, shell: false, stdio: 'inherit' });
   if (result.error || result.status !== 0)
@@ -87,13 +133,51 @@ async function removeRuntime(runtime, junction) {
   await rm(runtime, { recursive: true, force: true });
 }
 
+async function runDisposableDryRun(runtimeBackend, invocation) {
+  const dependencies = resolve(runtimeBackend, 'node_modules');
+  if (!containedPath(runtimeBackend, dependencies))
+    throw new Error('Backend dry-run dependency target escaped runtime.');
+  let failure;
+  try {
+    await mkdir(dependencies);
+    const info = await lstat(dependencies);
+    if (!info.isDirectory() || info.isSymbolicLink())
+      throw new Error('Backend dry-run dependencies are invalid.');
+    run(
+      invocation.command,
+      [
+        ...invocation.prefix,
+        'ci',
+        '--dry-run',
+        '--offline',
+        '--ignore-scripts',
+        '--no-audit',
+        '--fund=false',
+      ],
+      runtimeBackend,
+    );
+  } catch (error) {
+    failure = error;
+  } finally {
+    try {
+      const info = await lstat(dependencies).catch(() => undefined);
+      if (info) {
+        if (!info.isDirectory() || info.isSymbolicLink())
+          failure ??= new Error('Backend dry-run dependencies were replaced.');
+        else await rm(dependencies, { recursive: true, force: true });
+      }
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  if (failure) throw failure;
+}
+
 export async function runStagedBackendCheck({ snapshotRoot, repositoryRoot }) {
   const source = resolve(snapshotRoot, 'backend');
   const dependencies = resolve(repositoryRoot, 'backend', 'node_modules');
   if (!containedPath(resolve(snapshotRoot), source))
     throw new Error('Backend snapshot source escaped its root.');
-  const dependencyInfo = await stat(dependencies).catch(() => undefined);
-  if (!dependencyInfo?.isDirectory()) throw new Error('Backend dependencies are unavailable.');
   let runtime;
   let junction;
   let failure;
@@ -102,10 +186,21 @@ export async function runStagedBackendCheck({ snapshotRoot, repositoryRoot }) {
     const runtimeBackend = resolve(runtime, 'backend');
     await cp(source, runtimeBackend, { recursive: true, errorOnExist: true, force: false });
     await assertMatchingTrees(source, runtimeBackend);
+    const invocation = await npmInvocation();
+    await readPackageMap(resolve(runtimeBackend, 'package-lock.json'), 'Backend staged lock');
+    await runDisposableDryRun(runtimeBackend, invocation);
+    await assertMatchingTrees(source, runtimeBackend);
+    const dependencyInfo = await stat(dependencies).catch(() => undefined);
+    if (!dependencyInfo?.isDirectory()) throw new Error('Backend dependencies are unavailable.');
+    const [staged, installed] = await Promise.all([
+      readPackageMap(resolve(runtimeBackend, 'package-lock.json'), 'Backend staged lock'),
+      readPackageMap(resolve(dependencies, '.package-lock.json'), 'Backend installed lock'),
+    ]);
+    assertDependencyMetadataMatches(staged, installed);
     junction = resolve(runtimeBackend, 'node_modules');
     await symlink(dependencies, junction, process.platform === 'win32' ? 'junction' : 'dir');
-    const { command, prefix } = await npmInvocation();
-    for (const script of backendScripts) run(command, [...prefix, 'run', script], runtimeBackend);
+    for (const script of backendScripts)
+      run(invocation.command, [...invocation.prefix, 'run', script], runtimeBackend);
     console.log('QUALITY_STAGED_BACKEND_PASS');
   } catch (error) {
     failure = error;

@@ -1,7 +1,17 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, isAbsolute, resolve } from 'node:path';
@@ -41,6 +51,7 @@ import {
   qualityTargetForEvent,
   stagedPredicatePlan,
 } from '../../scripts/quality/quality-decisions.mjs';
+import { runStagedBackendCheck } from '../../scripts/quality/check-staged-backend.mjs';
 
 interface QualityTarget {
   kind: 'local_patch';
@@ -756,6 +767,54 @@ async function trackedHookBytes(repository: string) {
   return hash.digest('hex');
 }
 
+async function hiddenBackendLockHash(repository: string) {
+  return createHash('sha256')
+    .update(await readFile(resolve(repository, 'backend/node_modules/.package-lock.json')))
+    .digest('hex');
+}
+
+async function stagedBackendRuntimeEntries() {
+  return (await readdir(tmpdir(), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('quality-staged-backend-'))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+interface StagedBackendCheckerFixture {
+  directory: string;
+  snapshotRoot: string;
+  repositoryRoot: string;
+  stagedLock: string;
+  installedLock: string;
+}
+
+async function stagedBackendCheckerFixture(): Promise<StagedBackendCheckerFixture> {
+  const directory = await mkdtemp(resolve(tmpdir(), 'quality-staged-checker-fixture-'));
+  temporaryPaths.push(directory);
+  const snapshotRoot = resolve(directory, 'snapshot');
+  const repositoryRoot = resolve(directory, 'repository');
+  const stagedBackend = resolve(snapshotRoot, 'backend');
+  const installedDirectory = resolve(repositoryRoot, 'backend/node_modules');
+  const stagedLock = resolve(stagedBackend, 'package-lock.json');
+  const installedLock = resolve(installedDirectory, '.package-lock.json');
+  const sourceDependencies = resolve('backend/node_modules').replace(/\\/g, '/');
+  await cp(resolve('backend'), stagedBackend, {
+    recursive: true,
+    filter: (source) => source.replace(/\\/g, '/') !== sourceDependencies,
+  });
+  await mkdir(installedDirectory, { recursive: true });
+  const manifestPath = resolve(stagedBackend, 'package.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  manifest.scripts = Object.fromEntries(
+    Object.keys(manifest.scripts).map((script) => [script, 'node -e "process.exit(49)"']),
+  );
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeFile(installedLock, await readFile(stagedLock));
+  return { directory, snapshotRoot, repositoryRoot, stagedLock, installedLock };
+}
+
 async function privateHookTree(repository: string) {
   const directory = await mkdtemp(resolve(tmpdir(), 'quality-index-guard-'));
   const privateIndex = resolve(directory, 'index');
@@ -906,17 +965,28 @@ function fullCheckerCalls(calls: HookTraceCall[]) {
   );
 }
 
+function backendNpmCalls(calls: HookTraceCall[]) {
+  return calls.filter(
+    ({ command, args }) =>
+      command.replace(/\\/g, '/').endsWith('/npm') ||
+      command === 'npm' ||
+      args.some((argument) => argument.replace(/\\/g, '/').endsWith('npm-cli.js')),
+  );
+}
+
 function backendNpmScripts(calls: HookTraceCall[]) {
   const scripts = ['format:check', 'lint', 'typecheck', 'test:unit', 'test:e2e', 'build'];
-  return calls
-    .filter(
-      ({ command, args }) =>
-        command.replace(/\\/g, '/').endsWith('/npm') ||
-        command === 'npm' ||
-        args.some((argument) => argument.replace(/\\/g, '/').endsWith('npm-cli.js')),
-    )
+  return backendNpmCalls(calls)
     .map(({ args }) => args.find((argument) => scripts.includes(argument)))
     .filter((script): script is string => Boolean(script));
+}
+
+function backendNpmCiCalls(calls: HookTraceCall[]) {
+  return backendNpmCalls(calls).filter(({ args }) =>
+    ['ci', '--dry-run', '--offline', '--ignore-scripts', '--no-audit', '--fund=false'].every(
+      (argument) => args.includes(argument),
+    ),
+  );
 }
 
 function hasOrderedSteps(source: string, steps: readonly string[]) {
@@ -2152,12 +2222,26 @@ describe('staged and CI decision simulations', () => {
     const backendConfig = resolve(fixture.repository, 'backend/.prettierrc.json');
     const backendTest = resolve(fixture.repository, 'backend/test/hello.contract.e2e-spec.ts');
     const backendPackage = resolve(fixture.repository, 'backend/package.json');
+    const backendLock = resolve(fixture.repository, 'backend/package-lock.json');
     const packageJson = JSON.parse(await readFile(backendPackage, 'utf8')) as {
       scripts: Record<string, string>;
     };
     const configJson = JSON.parse(await readFile(backendConfig, 'utf8')) as Record<string, unknown>;
     packageJson.scripts['test:e2e'] = `${packageJson.scripts['test:e2e']} `;
     configJson.bracketSameLine = false;
+    const optionalPackage = Object.entries(
+      (
+        JSON.parse(await readFile(backendLock, 'utf8')) as {
+          packages: Record<string, { optional?: boolean }>;
+        }
+      ).packages,
+    ).find(
+      ([path, record]) =>
+        path.startsWith('node_modules/') &&
+        record.optional === true &&
+        !existsSync(resolve(fixture.repository, 'backend', path)),
+    );
+    expect(optionalPackage).toBeDefined();
     await Promise.all([
       writeFile(backendSource, 'export const stageZeroBackendOracle = true;\n'),
       writeFile(
@@ -2183,6 +2267,7 @@ describe('staged and CI decision simulations', () => {
       writeFile(backendConfig, '{'),
     ]);
     const before = await protectedHookState(fixture.repository);
+    const hiddenLockBefore = await hiddenBackendLockHash(fixture.repository);
     const result = runStage0Hook(fixture);
     const calls = await hookTrace(fixture.trace);
 
@@ -2199,8 +2284,179 @@ describe('staged and CI decision simulations', () => {
       'build',
     ]);
     expect(result.stdout).toContain('QUALITY_FULL_CHECK_PASS');
+    expect(await hiddenBackendLockHash(fixture.repository)).toBe(hiddenLockBefore);
     await expectProtectedHookState(fixture.repository, before);
   }, 180_000);
+
+  it('rejects an unused nonoptional staged lock record before backend scripts run', async () => {
+    const fixture = await stage0HookFixture();
+    const lockPath = resolve(fixture.repository, 'backend/package-lock.json');
+    const lock = JSON.parse(await readFile(lockPath, 'utf8')) as {
+      packages: Record<string, unknown>;
+    };
+    lock.packages['node_modules/bs001-unused-required'] = {
+      version: '1.0.0',
+      resolved:
+        'https://registry.npmjs.org/bs001-unused-required/-/bs001-unused-required-1.0.0.tgz',
+      integrity: 'sha512-bs001unusedrequired',
+    };
+    await writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+    formatFixturePaths(fixture.repository, [lockPath]);
+    gitFixture(fixture.repository, ['add', '--', 'backend/package-lock.json']);
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Backend dependency metadata mismatch.');
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(backendNpmScripts(calls)).toEqual([]);
+    await expectProtectedHookState(fixture.repository, before);
+  }, 180_000);
+
+  it('keeps backend CI checkout credentials disabled with read-only repository contents', async () => {
+    const workflow = await readFile(resolve('.github/workflows/backend-quality.yml'), 'utf8');
+    expect(workflow).toContain('permissions:\n  contents: read');
+    expect(workflow).toContain('persist-credentials: false');
+    expect(workflow).toContain('- run: npm ci');
+  });
+
+  it('rejects a staged installed dependency record that differs from the host metadata', async () => {
+    const fixture = await stage0HookFixture();
+    const lockPath = resolve(fixture.repository, 'backend/package-lock.json');
+    const lock = JSON.parse(await readFile(lockPath, 'utf8')) as {
+      packages: Record<string, { bs001FixtureMarker?: string }>;
+    };
+    const installed = lock.packages['node_modules/@nestjs/common'];
+    expect(installed).toBeDefined();
+    if (!installed) throw new Error('Nest common lock fixture is unavailable.');
+    installed.bs001FixtureMarker = 'mismatch';
+    await writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+    formatFixturePaths(fixture.repository, [lockPath]);
+    gitFixture(fixture.repository, ['add', '--', 'backend/package-lock.json']);
+    const before = await protectedHookState(fixture.repository);
+    const hiddenLockBefore = await hiddenBackendLockHash(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Backend dependency metadata mismatch.');
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(backendNpmCiCalls(calls)).toHaveLength(1);
+    expect(backendNpmScripts(calls)).toEqual([]);
+    expect(await hiddenBackendLockHash(fixture.repository)).toBe(hiddenLockBefore);
+    await expectProtectedHookState(fixture.repository, before);
+  }, 180_000);
+
+  it('rejects a staged manifest dependency version that disagrees with the full lock before backend scripts run', async () => {
+    const fixture = await stage0HookFixture();
+    const manifestPath = resolve(fixture.repository, 'backend/package.json');
+    const lockPath = resolve(fixture.repository, 'backend/package-lock.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    const lock = JSON.parse(await readFile(lockPath, 'utf8')) as {
+      packages: Record<string, { version?: string }>;
+    };
+    const installed = lock.packages['node_modules/@nestjs/common'];
+    expect(installed?.version).toBeDefined();
+    if (!installed?.version) throw new Error('Nest common lock fixture is unavailable.');
+    manifest.dependencies['@nestjs/common'] = '11.2.5';
+    installed.version = '11.2.4';
+    await Promise.all([
+      writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`),
+      writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`),
+    ]);
+    formatFixturePaths(fixture.repository, [manifestPath, lockPath]);
+    gitFixture(fixture.repository, [
+      'add',
+      '--',
+      'backend/package.json',
+      'backend/package-lock.json',
+    ]);
+    const before = await protectedHookState(fixture.repository);
+    const result = runStage0Hook(fixture);
+    const calls = await hookTrace(fixture.trace);
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain(
+      'Backend npm command failed: --fund=false.',
+    );
+    expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid: lock file's @nestjs/common@");
+    expect(fullCheckerCalls(calls)).toHaveLength(1);
+    expect(backendNpmCiCalls(calls)).toHaveLength(1);
+    expect(backendNpmScripts(calls)).toEqual([]);
+    await expectProtectedHookState(fixture.repository, before);
+  }, 180_000);
+
+  it('rejects missing fixture-owned installed dependency metadata after isolated npm preparation', async () => {
+    const fixture = await stagedBackendCheckerFixture();
+    await rm(fixture.installedLock);
+    const [runtimeBefore, stagedBefore] = await Promise.all([
+      stagedBackendRuntimeEntries(),
+      createHash('sha256')
+        .update(await readFile(fixture.stagedLock))
+        .digest('hex'),
+    ]);
+
+    await expect(
+      runStagedBackendCheck({
+        snapshotRoot: fixture.snapshotRoot,
+        repositoryRoot: fixture.repositoryRoot,
+      }),
+    ).rejects.toThrow('Backend installed lock dependency metadata is unavailable.');
+
+    expect(await stagedBackendRuntimeEntries()).toEqual(runtimeBefore);
+    expect(
+      createHash('sha256')
+        .update(await readFile(fixture.stagedLock))
+        .digest('hex'),
+    ).toBe(stagedBefore);
+    await expect(readFile(fixture.installedLock)).rejects.toMatchObject({ code: 'ENOENT' });
+  }, 180_000);
+
+  it('rejects malformed fixture-owned installed dependency metadata before backend scripts run', async () => {
+    const fixture = await stagedBackendCheckerFixture();
+    await writeFile(fixture.installedLock, '{');
+    const [runtimeBefore, stagedBefore] = await Promise.all([
+      stagedBackendRuntimeEntries(),
+      createHash('sha256')
+        .update(await readFile(fixture.stagedLock))
+        .digest('hex'),
+    ]);
+
+    await expect(
+      runStagedBackendCheck({
+        snapshotRoot: fixture.snapshotRoot,
+        repositoryRoot: fixture.repositoryRoot,
+      }),
+    ).rejects.toThrow('Backend installed lock dependency metadata is invalid.');
+
+    expect(await stagedBackendRuntimeEntries()).toEqual(runtimeBefore);
+    expect(
+      createHash('sha256')
+        .update(await readFile(fixture.stagedLock))
+        .digest('hex'),
+    ).toBe(stagedBefore);
+    expect(await readFile(fixture.installedLock, 'utf8')).toBe('{');
+  }, 180_000);
+
+  it('rejects malformed staged dependency metadata without invoking backend scripts', async () => {
+    const fixture = await stagedBackendCheckerFixture();
+    await writeFile(fixture.stagedLock, '{');
+    const runtimeBefore = await stagedBackendRuntimeEntries();
+
+    await expect(
+      runStagedBackendCheck({
+        snapshotRoot: fixture.snapshotRoot,
+        repositoryRoot: fixture.repositoryRoot,
+      }),
+    ).rejects.toThrow('Backend staged lock dependency metadata is invalid.');
+
+    expect(await stagedBackendRuntimeEntries()).toEqual(runtimeBefore);
+    expect(await readFile(fixture.stagedLock, 'utf8')).toBe('{');
+    expect(await readFile(fixture.installedLock, 'utf8')).not.toBe('{');
+  });
 
   it('routes a staged backend deletion through the backend gate and fails closed without dependencies', async () => {
     const fixture = await stage0HookFixture();
